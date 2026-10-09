@@ -49,3 +49,33 @@ def clasificar_score(score):
 
     else:
         return "No recomendada"
+def verificar_requisitos_criticos(requisitos):
+
+    """
+    Recibe una lista de requisitos críticos.
+
+    Ejemplo:
+
+    [
+        {
+            "requisito": "Experiencia mínima",
+            "cumple": True
+        },
+        {
+            "requisito": "Certificación RETIE",
+            "cumple": False
+        }
+    ]
+    """
+
+    incumplimientos = []
+
+    for requisito in requisitos:
+
+        if not requisito["cumple"]:
+
+            incumplimientos.append(
+                requisito["requisito"]
+            )
+
+    return incumplimientos
