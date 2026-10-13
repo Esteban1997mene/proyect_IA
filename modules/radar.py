@@ -1,6 +1,229 @@
 import streamlit as st
 from datetime import date
 
+from services.search_service import ejecutar_radar
+
+
+# =========================================================
+# FUNCIONES AUXILIARES
+# =========================================================
+
+def obtener_bandera(pais):
+    banderas = {
+        "Colombia": "🇨🇴",
+        "Ecuador": "🇪🇨",
+        "Perú": "🇵🇪",
+        "Bolivia": "🇧🇴",
+        "Venezuela": "🇻🇪"
+    }
+
+    return banderas.get(pais, "🌎")
+
+
+def guardar_para_analisis(oportunidad):
+    """
+    Guarda la oportunidad seleccionada para que posteriormente
+    pueda ser utilizada por el Analizador IA.
+    """
+
+    st.session_state["oportunidad_web"] = oportunidad
+    st.session_state["solicitar_analisis"] = True
+
+
+# =========================================================
+# TARJETA DE RESULTADO
+# =========================================================
+
+def mostrar_tarjeta_oportunidad(oportunidad, indice):
+
+    pais = oportunidad.get(
+        "pais",
+        "No identificado"
+    )
+
+    bandera = obtener_bandera(pais)
+
+    titulo = oportunidad.get(
+        "titulo",
+        "Oportunidad sin título"
+    )
+
+    fuente = oportunidad.get(
+        "fuente",
+        "Fuente no identificada"
+    )
+
+    sector = oportunidad.get(
+        "sector",
+        "No identificado"
+    )
+
+    fecha_deteccion = oportunidad.get(
+        "fecha_deteccion",
+        "No disponible"
+    )
+
+    url = oportunidad.get(
+        "url",
+        ""
+    )
+
+    with st.container(border=True):
+
+        col1, col2 = st.columns(
+            [4, 1]
+        )
+
+        # =================================================
+        # INFORMACIÓN
+        # =================================================
+
+        with col1:
+
+            st.subheader(titulo)
+
+            info1, info2, info3 = st.columns(3)
+
+            with info1:
+                st.caption("PAÍS")
+                st.write(
+                    f"{bandera} {pais}"
+                )
+
+            with info2:
+                st.caption("FUENTE")
+                st.write(fuente)
+
+            with info3:
+                st.caption("LÍNEA")
+                st.write(sector)
+
+            st.write("")
+
+            st.caption(
+                f"Detectado por INTI: {fecha_deteccion}"
+            )
+
+            if url:
+
+                st.link_button(
+                    "🌐 Ver fuente original",
+                    url
+                )
+
+        # =================================================
+        # ACCIONES
+        # =================================================
+
+        with col2:
+
+            st.caption(
+                "ANÁLISIS INTI"
+            )
+
+            st.info(
+                "Pendiente de análisis"
+            )
+
+            if st.button(
+                "🧠 Analizar",
+                key=f"analizar_web_{indice}",
+                use_container_width=True,
+                type="primary"
+            ):
+
+                guardar_para_analisis(
+                    oportunidad
+                )
+
+                st.success(
+                    "Enviada al Analizador IA."
+                )
+
+
+# =========================================================
+# RESULTADOS
+# =========================================================
+
+def mostrar_resultados_radar():
+
+    if "resultados_radar" not in st.session_state:
+        return
+
+    oportunidades = st.session_state[
+        "resultados_radar"
+    ]
+
+    if not oportunidades:
+        return
+
+    st.divider()
+
+    # =====================================================
+    # RESUMEN
+    # =====================================================
+
+    st.subheader(
+        "📡 Resultados del Radar"
+    )
+
+    total = len(oportunidades)
+
+    paises_detectados = len(
+        set(
+            oportunidad.get("pais")
+            for oportunidad in oportunidades
+            if oportunidad.get("pais")
+        )
+    )
+
+    fuentes_detectadas = len(
+        set(
+            oportunidad.get("fuente")
+            for oportunidad in oportunidades
+            if oportunidad.get("fuente")
+        )
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "Resultados",
+            total
+        )
+
+    with col2:
+        st.metric(
+            "Países",
+            paises_detectados
+        )
+
+    with col3:
+        st.metric(
+            "Fuentes",
+            fuentes_detectadas
+        )
+
+    st.write("")
+
+    # =====================================================
+    # RESULTADOS
+    # =====================================================
+
+    for indice, oportunidad in enumerate(
+        oportunidades
+    ):
+
+        mostrar_tarjeta_oportunidad(
+            oportunidad,
+            indice
+        )
+
+
+# =========================================================
+# RADAR PRINCIPAL
+# =========================================================
 
 def mostrar_radar():
 
@@ -8,24 +231,34 @@ def mostrar_radar():
     # ENCABEZADO
     # =====================================================
 
-    st.title("🔎 Radar de oportunidades")
+    st.title(
+        "🔎 Radar de oportunidades"
+    )
 
     st.caption(
-        "Identificación y análisis de convocatorias, "
-        "licitaciones y oportunidades de proyectos."
+        "Identificación preliminar de convocatorias, "
+        "licitaciones y oportunidades relacionadas con "
+        "las líneas estratégicas de INTILED."
     )
 
     st.divider()
 
     # =====================================================
-    # FILTROS
+    # CONFIGURACIÓN
     # =====================================================
 
-    st.subheader("🎯 Configuración de búsqueda")
+    st.subheader(
+        "🎯 Configuración de búsqueda"
+    )
 
     col1, col2, col3 = st.columns(3)
 
+    # =====================================================
+    # PAÍSES
+    # =====================================================
+
     with col1:
+
         paises = st.multiselect(
             "País",
             [
@@ -36,14 +269,20 @@ def mostrar_radar():
                 "🇻🇪 Venezuela"
             ],
             default=[
-                "🇨🇴 Colombia",
-                "🇪🇨 Ecuador",
-                "🇵🇪 Perú",
-                "🇧🇴 Bolivia"
-            ]
+                "🇨🇴 Colombia"
+            ],
+            help=(
+                "Selecciona los países en los que "
+                "INTI buscará oportunidades."
+            )
         )
 
+    # =====================================================
+    # SECTORES
+    # =====================================================
+
     with col2:
+
         sectores = st.multiselect(
             "Líneas de interés",
             [
@@ -61,13 +300,20 @@ def mostrar_radar():
                 "Tecnología e innovación"
             ],
             default=[
-                "Energía solar",
-                "Alumbrado público",
-                "Transición energética"
-            ]
+                "Energía solar"
+            ],
+            help=(
+                "Selecciona las líneas estratégicas "
+                "que se utilizarán para buscar oportunidades."
+            )
         )
 
+    # =====================================================
+    # FINANCIACIÓN
+    # =====================================================
+
     with col3:
+
         financiacion = st.multiselect(
             "Tipo de oportunidad",
             [
@@ -76,62 +322,114 @@ def mostrar_radar():
                 "Cooperación internacional",
                 "Banca multilateral",
                 "Convocatorias de innovación"
-            ]
+            ],
+            help=(
+                "Este filtro será utilizado de forma "
+                "más avanzada cuando integremos "
+                "los conectores oficiales."
+            )
         )
+
+    # =====================================================
+    # SEGUNDA FILA
+    # =====================================================
 
     col4, col5, col6 = st.columns(3)
 
     with col4:
+
         score_minimo = st.slider(
             "INTILED Score mínimo",
             min_value=0,
             max_value=100,
             value=60,
-            step=5
+            step=5,
+            help=(
+                "En la siguiente fase este valor "
+                "filtrará automáticamente las "
+                "oportunidades analizadas por INTI."
+            )
         )
 
     with col5:
+
         presupuesto_minimo = st.number_input(
             "Presupuesto mínimo",
             min_value=0,
             value=0,
             step=10000000,
-            help="Valor de referencia. Posteriormente se manejará por moneda."
+            help=(
+                "Filtro preparado para la integración "
+                "con fuentes que proporcionen cuantías."
+            )
         )
 
     with col6:
+
         fecha_busqueda = st.date_input(
             "Fecha de búsqueda",
             value=date.today()
         )
 
-    st.write("")
-
     # =====================================================
-    # PALABRAS CLAVE
+    # CONFIGURACIÓN AVANZADA
     # =====================================================
 
-    with st.expander("⚙️ Configuración avanzada"):
+    with st.expander(
+        "⚙️ Configuración avanzada"
+    ):
 
-        palabras = st.text_area(
+        palabras_adicionales = st.text_area(
             "Palabras clave adicionales",
             placeholder=(
-                "Ejemplo: luminarias solares, sistemas fotovoltaicos, "
-                "telegestión, eficiencia energética..."
+                "Ejemplo: luminarias solares, "
+                "sistemas fotovoltaicos, RETILAP, "
+                "telegestión, microrredes..."
             )
         )
 
-        excluir = st.text_area(
+        terminos_excluidos = st.text_area(
             "Excluir términos",
             placeholder=(
-                "Ejemplo: hidrocarburos, minería, combustibles..."
+                "Ejemplo: hidrocarburos, minería, "
+                "combustibles..."
             )
+        )
+
+        st.caption(
+            "Las palabras adicionales y exclusiones "
+            "quedan preparadas para integrarse al "
+            "motor semántico en la siguiente fase."
         )
 
     st.write("")
 
     # =====================================================
-    # BOTÓN DE BÚSQUEDA
+    # INFORMACIÓN DE BÚSQUEDA
+    # =====================================================
+
+    with st.container(border=True):
+
+        st.markdown(
+            "#### 🤖 Radar INTI"
+        )
+
+        st.write(
+            "INTI explorará fuentes relacionadas con "
+            "los países y líneas seleccionadas para "
+            "identificar posibles oportunidades."
+        )
+
+        st.caption(
+            "Los resultados actuales son preliminares. "
+            "Posteriormente serán verificados contra "
+            "fuentes oficiales y analizados mediante IA."
+        )
+
+    st.write("")
+
+    # =====================================================
+    # BOTÓN BUSCAR
     # =====================================================
 
     buscar = st.button(
@@ -141,164 +439,133 @@ def mostrar_radar():
     )
 
     # =====================================================
-    # BÚSQUEDA
+    # EJECUTAR BÚSQUEDA
     # =====================================================
 
     if buscar:
 
+        # -------------------------------------------------
+        # VALIDAR PAÍSES
+        # -------------------------------------------------
+
         if not paises:
 
             st.warning(
-                "Selecciona al menos un país para realizar la búsqueda."
+                "Selecciona al menos un país "
+                "para realizar la búsqueda."
             )
 
             return
+
+        # -------------------------------------------------
+        # VALIDAR SECTORES
+        # -------------------------------------------------
 
         if not sectores:
 
             st.warning(
-                "Selecciona al menos una línea de interés."
+                "Selecciona al menos una línea "
+                "de interés."
             )
 
             return
 
-        with st.spinner(
-            "INTI está buscando oportunidades..."
-        ):
+        # -------------------------------------------------
+        # ESTADO DE BÚSQUEDA
+        # -------------------------------------------------
 
-            # En la siguiente fase esta información
-            # vendrá del motor de búsqueda real.
+        with st.status(
+            "🔎 INTI está explorando oportunidades...",
+            expanded=True
+        ) as status:
 
-            oportunidades_demo = [
-                {
-                    "pais": "🇨🇴 Colombia",
-                    "proyecto": "Modernización de alumbrado público",
-                    "entidad": "Entidad pública",
-                    "tipo": "Recursos públicos",
-                    "presupuesto": "$2.800 millones COP",
-                    "cierre": "28/10/2026",
-                    "score": 92
-                },
-                {
-                    "pais": "🇪🇨 Ecuador",
-                    "proyecto": "Sistema solar fotovoltaico institucional",
-                    "entidad": "Entidad contratante",
-                    "tipo": "Recursos públicos",
-                    "presupuesto": "USD 620.000",
-                    "cierre": "04/11/2026",
-                    "score": 87
-                },
-                {
-                    "pais": "🇵🇪 Perú",
-                    "proyecto": "Sistemas de eficiencia energética",
-                    "entidad": "Entidad regional",
-                    "tipo": "Cooperación internacional",
-                    "presupuesto": "USD 410.000",
-                    "cierre": "12/11/2026",
-                    "score": 78
-                }
-            ]
+            st.write(
+                "🌎 Identificando países seleccionados..."
+            )
 
-        st.success(
-            f"Se identificaron {len(oportunidades_demo)} "
-            "oportunidades preliminares."
-        )
+            st.write(
+                "🏛️ Consultando fuentes disponibles..."
+            )
 
-        st.divider()
+            st.write(
+                "⚡ Buscando coincidencias con las "
+                "líneas estratégicas..."
+            )
 
-        mostrar_resultados(
-            oportunidades_demo,
-            score_minimo
-        )
+            # =============================================
+            # MOTOR DE BÚSQUEDA
+            # =============================================
 
+            try:
 
-def mostrar_resultados(oportunidades, score_minimo):
+                oportunidades = ejecutar_radar(
+                    paises,
+                    sectores
+                )
 
-    st.subheader("📋 Oportunidades identificadas")
+                # =========================================
+                # GUARDAR RESULTADOS
+                # =========================================
 
-    oportunidades_filtradas = [
-        oportunidad
-        for oportunidad in oportunidades
-        if oportunidad["score"] >= score_minimo
-    ]
+                st.session_state[
+                    "resultados_radar"
+                ] = oportunidades
 
-    if not oportunidades_filtradas:
+                status.update(
+                    label="✅ Búsqueda finalizada",
+                    state="complete",
+                    expanded=False
+                )
 
-        st.warning(
-            "No existen oportunidades que cumplan "
-            "el Score mínimo seleccionado."
-        )
+            except Exception as error:
 
-        return
+                oportunidades = []
 
-    for i, oportunidad in enumerate(
-        oportunidades_filtradas
-    ):
+                st.session_state[
+                    "resultados_radar"
+                ] = []
 
-        score = oportunidad["score"]
+                status.update(
+                    label="❌ Error durante la búsqueda",
+                    state="error",
+                    expanded=True
+                )
 
-        if score >= 80:
-            estado = "🟢 Alta oportunidad"
+                st.error(
+                    "No fue posible completar "
+                    "la búsqueda."
+                )
 
-        elif score >= 60:
-            estado = "🟡 Analizar"
+                st.code(
+                    str(error)
+                )
 
-        elif score >= 40:
-            estado = "🟠 Baja compatibilidad"
+        # =================================================
+        # MENSAJE FINAL
+        # =================================================
+
+        if oportunidades:
+
+            st.success(
+                f"INTI identificó "
+                f"{len(oportunidades)} "
+                "resultados preliminares."
+            )
 
         else:
-            estado = "🔴 No recomendada"
 
-        with st.container(border=True):
+            st.warning(
+                "No se encontraron oportunidades "
+                "con los parámetros seleccionados."
+            )
 
-            col1, col2 = st.columns([4, 1])
+            st.caption(
+                "Puedes intentar seleccionar otra "
+                "línea de interés o ampliar los países."
+            )
 
-            with col1:
+    # =====================================================
+    # MOSTRAR RESULTADOS GUARDADOS
+    # =====================================================
 
-                st.subheader(
-                    oportunidad["proyecto"]
-                )
-
-                st.write(
-                    f"**País:** {oportunidad['pais']}"
-                )
-
-                st.write(
-                    f"**Entidad:** {oportunidad['entidad']}"
-                )
-
-                st.write(
-                    f"**Financiación:** {oportunidad['tipo']}"
-                )
-
-                st.write(
-                    f"**Presupuesto:** {oportunidad['presupuesto']}"
-                )
-
-                st.write(
-                    f"**Fecha de cierre:** {oportunidad['cierre']}"
-                )
-
-            with col2:
-
-                st.metric(
-                    "INTILED Score",
-                    f"{score}/100"
-                )
-
-                st.write(f"**{estado}**")
-
-                if st.button(
-                    "🧠 Analizar",
-                    key=f"analizar_{i}",
-                    use_container_width=True
-                ):
-
-                    st.session_state[
-                        "oportunidad_seleccionada"
-                    ] = oportunidad
-
-                    st.success(
-                        "Oportunidad seleccionada "
-                        "para análisis."
-                    )
+    mostrar_resultados_radar()
