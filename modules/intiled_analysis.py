@@ -11,287 +11,603 @@ from services.scoring import (
 
 
 # ============================================================
-# COLORES / ICONOS DE ESTADO
+# INTI PROJECTS AI
+# ANÁLISIS ESTRATÉGICO INTILED
 # ============================================================
+#
+# Recibe una oportunidad real seleccionada desde el Radar.
+#
+# ETAPAS:
+#
+# 1. Lee la oportunidad.
+# 2. Recupera Radar Score y ADN detectado.
+# 3. Evalúa únicamente la información disponible.
+# 4. NO inventa requisitos del pliego.
+# 5. Identifica información pendiente.
+# 6. Prepara la oportunidad para análisis documental.
+#
+# Radar Score != Bid Score
+#
+# ============================================================
+
+
+# ============================================================
+# FUNCIONES AUXILIARES
+# ============================================================
+
+def obtener_valor(
+    oportunidad,
+    campo,
+    default="No informado"
+):
+
+    valor = oportunidad.get(campo)
+
+    if valor is None:
+        return default
+
+    if valor == "":
+        return default
+
+    return valor
+
+
+def normalizar_score(valor):
+
+    try:
+
+        valor = float(valor)
+
+    except (TypeError, ValueError):
+
+        return 0
+
+    return max(
+        0,
+        min(valor, 100)
+    )
+
 
 def icono_estado(estado):
 
-    if estado == "CUMPLE":
-        return "🟢"
+    iconos = {
 
-    if estado == "CUMPLE_PARCIAL":
-        return "🟡"
+        "CUMPLE":
+            "✅",
 
-    if estado == "NO_CUMPLE":
-        return "🔴"
+        "CUMPLE_PARCIAL":
+            "🟡",
 
-    return "⚪"
+        "NO_CUMPLE":
+            "❌",
+
+        "PENDIENTE":
+            "⚪"
+    }
+
+    return iconos.get(
+        estado,
+        "⚪"
+    )
 
 
 # ============================================================
-# PANTALLA PRINCIPAL
+# OBTENER COINCIDENCIAS ADN
 # ============================================================
 
-def mostrar_analisis_intiled():
+def obtener_coincidencias_adn(
+    oportunidad
+):
 
-    st.title("🧠 Análisis Estratégico INTILED")
-
-    st.caption(
-        "Evaluación de oportunidades mediante el ADN "
-        "empresarial de INTILED SAS BIC."
+    detalle = oportunidad.get(
+        "radar_detalle",
+        {}
     )
 
-    st.divider()
+    coincidencias = []
 
-    # ========================================================
-    # CONVOCATORIA DE PRUEBA
-    # ========================================================
+    categorias = [
 
-    st.subheader("📋 Oportunidad analizada")
+        "premium",
 
-    st.info(
-        "Esta primera versión utiliza una oportunidad "
-        "de prueba para validar el motor INTILED. "
-        "Posteriormente los datos llegarán directamente "
-        "desde el Radar."
-    )
+        "positivas",
 
-    with st.container(border=True):
+        "lineas_alta",
 
-        st.markdown(
-            "### Modernización de alumbrado público "
-            "con tecnología solar fotovoltaica"
+        "lineas_media",
+
+        "tecnologias",
+
+        "proyectos_objetivo"
+    ]
+
+    for categoria in categorias:
+
+        for elemento in detalle.get(
+            categoria,
+            []
+        ):
+
+            if elemento not in coincidencias:
+
+                coincidencias.append(
+                    elemento
+                )
+
+    return coincidencias
+
+
+# ============================================================
+# DETERMINAR FACTORES PRELIMINARES
+# ============================================================
+
+def construir_factores_preliminares(
+    oportunidad
+):
+
+    """
+    IMPORTANTE:
+
+    Estos factores NO representan todavía
+    cumplimiento del pliego.
+
+    Únicamente utilizamos información que puede
+    inferirse de la metadata de la oportunidad.
+
+    Experiencia, personal, habilitantes y capacidad
+    financiera quedan deliberadamente sin validar.
+    """
+
+    radar_score = normalizar_score(
+        oportunidad.get(
+            "radar_score",
+            0
         )
+    )
 
-        col1, col2, col3 = st.columns(3)
+    detalle = oportunidad.get(
+        "radar_detalle",
+        {}
+    )
 
-        with col1:
-            st.write("**País**")
-            st.write("🇨🇴 Colombia")
+    tecnologias = detalle.get(
+        "tecnologias",
+        []
+    )
 
-        with col2:
-            st.write("**Sector**")
-            st.write("Alumbrado público")
+    lineas = detalle.get(
+        "lineas_alta",
+        []
+    )
 
-        with col3:
-            st.write("**Tecnología**")
-            st.write("Solar fotovoltaica + LED")
+    premium = detalle.get(
+        "premium",
+        []
+    )
 
-    # ========================================================
-    # REQUISITOS DE PRUEBA
-    # ========================================================
+    # --------------------------------------------------------
+    # AFINIDAD
+    # --------------------------------------------------------
+
+    afinidad = radar_score
+
+    # --------------------------------------------------------
+    # TECNOLOGÍA
+    # --------------------------------------------------------
+
+    if len(tecnologias) >= 3:
+
+        tecnologia = 95
+
+    elif len(tecnologias) == 2:
+
+        tecnologia = 80
+
+    elif len(tecnologias) == 1:
+
+        tecnologia = 65
+
+    elif premium or lineas:
+
+        tecnologia = 50
+
+    else:
+
+        tecnologia = 25
+
+    # --------------------------------------------------------
+    # UBICACIÓN
+    # --------------------------------------------------------
+
+    pais = str(
+        oportunidad.get(
+            "pais",
+            ""
+        )
+    ).lower()
+
+    if "colombia" in pais:
+
+        ubicacion = 90
+
+    else:
+
+        ubicacion = 60
+
+    # --------------------------------------------------------
+    # FACTORES PENDIENTES
+    # --------------------------------------------------------
+    #
+    # 50 significa NEUTRO / NO VALIDADO.
+    #
+    # NO significa que INTILED cumpla 50%.
+    #
+    # Más adelante estos valores serán sustituidos
+    # por el análisis real del pliego.
+    # --------------------------------------------------------
+
+    experiencia = 50
+
+    personal = 50
+
+    habilitantes = 50
+
+    economico = 50
+
+    tiempo = 50
+
+    competitividad = 50
+
+    return {
+
+        "afinidad":
+            afinidad,
+
+        "experiencia":
+            experiencia,
+
+        "personal":
+            personal,
+
+        "tecnologia":
+            tecnologia,
+
+        "habilitantes":
+            habilitantes,
+
+        "economico":
+            economico,
+
+        "ubicacion":
+            ubicacion,
+
+        "tiempo":
+            tiempo,
+
+        "competitividad":
+            competitividad
+    }
+
+
+# ============================================================
+# REQUISITOS PRELIMINARES
+# ============================================================
+
+def construir_requisitos_preliminares(
+    oportunidad
+):
+
+    """
+    Mientras no tengamos los pliegos/TDR,
+    NO fabricamos requisitos específicos.
+
+    Creamos únicamente controles de validación
+    para indicar qué debe revisarse.
+    """
 
     requisitos = [
 
         {
-            "tipo": "experiencia_empresa",
+            "id":
+                "EXP-01",
 
-            "descripcion": (
-                "Acreditar mínimo 2 contratos relacionados "
-                "con alumbrado público y sistemas fotovoltaicos."
-            ),
+            "nombre":
+                "Experiencia específica de la empresa",
 
-            "componentes": [
-                "alumbrado_publico",
-                "sistemas_fotovoltaicos"
-            ],
+            "tipo":
+                "experiencia_empresa",
 
-            "cantidad_contratos": 2,
+            "componentes":
+                [],
 
-            "valor_minimo": 0,
+            "cantidad_minima":
+                1,
 
-            "critico": True
+            "valor_minimo":
+                0,
+
+            "critico":
+                True
         },
 
         {
-            "tipo": "personal",
+            "id":
+                "FIN-01",
 
-            "descripcion": (
-                "Ingeniero electricista con experiencia "
-                "en alumbrado público."
-            ),
+            "nombre":
+                "Capacidad financiera y organizacional",
 
-            "profesion": "ingeniero electricista",
+            "tipo":
+                "financiero",
 
-            "areas": [
-                "alumbrado_publico"
-            ],
-
-            "critico": False
-        },
-
-        {
-            "tipo": "capacidad_tecnica",
-
-            "descripcion": (
-                "Capacidad para implementar alumbrado "
-                "solar y sistemas de automatización."
-            ),
-
-            "keywords": [
-                "alumbrado solar",
-                "automatización",
-                "sistemas solares fotovoltaicos"
-            ],
-
-            "critico": False
-        },
-
-        {
-            "tipo": "financiero",
-
-            "descripcion": (
-                "Cumplimiento de indicadores financieros "
-                "habilitantes."
-            ),
-
-            "critico": True
+            "critico":
+                True
         }
     ]
 
-    # ========================================================
-    # MOTOR DE REQUISITOS
-    # ========================================================
+    return requisitos
 
-    resultados = analizar_requisitos(
-        requisitos
+
+# ============================================================
+# INFORMACIÓN GENERAL
+# ============================================================
+
+def mostrar_encabezado_oportunidad(
+    oportunidad
+):
+
+    titulo = obtener_valor(
+        oportunidad,
+        "titulo",
+        "Oportunidad sin título"
     )
 
-    resumen = generar_resumen_requisitos(
-        resultados
+    st.markdown(
+        f"## {titulo}"
     )
 
-    # ========================================================
-    # FACTORES TEMPORALES DE PRUEBA
-    # ========================================================
-    #
-    # IMPORTANTE:
-    # Estos valores son únicamente para probar la interfaz.
-    # Después serán calculados automáticamente.
-    # ========================================================
-
-    factores = {
-
-        "afinidad": 95,
-
-        "experiencia": 60,
-
-        "personal": 80,
-
-        "tecnologia": 95,
-
-        "habilitantes": 55,
-
-        "economico": 70,
-
-        "ubicacion": 95,
-
-        "tiempo": 80,
-
-        "competitividad": 80
-    }
-
-    # ========================================================
-    # OPPORTUNITY ENGINE
-    # ========================================================
-
-    analisis = evaluar_oportunidad(
-        factores,
-        resultados
+    col1, col2, col3 = st.columns(
+        3
     )
 
-    score = analisis["score"]
+    with col1:
 
-    decision = analisis["decision"]
+        st.write(
+            "**Entidad**"
+        )
 
-    # ========================================================
-    # SCORE PRINCIPAL
-    # ========================================================
+        st.write(
+            obtener_valor(
+                oportunidad,
+                "entidad"
+            )
+        )
+
+    with col2:
+
+        st.write(
+            "**Ubicación**"
+        )
+
+        ciudad = obtener_valor(
+            oportunidad,
+            "ciudad",
+            ""
+        )
+
+        departamento = obtener_valor(
+            oportunidad,
+            "departamento",
+            ""
+        )
+
+        ubicacion = ", ".join(
+            [
+                str(x)
+                for x in [
+                    ciudad,
+                    departamento
+                ]
+                if x
+            ]
+        )
+
+        st.write(
+            ubicacion
+            if ubicacion
+            else "No informada"
+        )
+
+    with col3:
+
+        st.write(
+            "**Fuente**"
+        )
+
+        st.write(
+            obtener_valor(
+                oportunidad,
+                "fuente"
+            )
+        )
 
     st.write("")
-    st.subheader("🎯 Evaluación estratégica")
 
-    col1, col2, col3 = st.columns(3)
+    col4, col5, col6 = st.columns(
+        3
+    )
+
+    with col4:
+
+        st.write(
+            "**Presupuesto**"
+        )
+
+        st.write(
+            obtener_valor(
+                oportunidad,
+                "valor"
+            )
+        )
+
+    with col5:
+
+        st.write(
+            "**Modalidad**"
+        )
+
+        st.write(
+            obtener_valor(
+                oportunidad,
+                "modalidad"
+            )
+        )
+
+    with col6:
+
+        st.write(
+            "**Cierre**"
+        )
+
+        st.write(
+            obtener_valor(
+                oportunidad,
+                "fecha_cierre"
+            )
+        )
+
+
+# ============================================================
+# RADAR SCORE
+# ============================================================
+
+def mostrar_radar_score(
+    oportunidad
+):
+
+    score = normalizar_score(
+        oportunidad.get(
+            "radar_score",
+            0
+        )
+    )
+
+    nivel = oportunidad.get(
+        "radar_nivel",
+        "PENDIENTE"
+    )
+
+    recomendacion = oportunidad.get(
+        "radar_recomendacion",
+        "REVISAR"
+    )
+
+    st.subheader(
+        "📡 Evaluación preliminar del Radar"
+    )
+
+    col1, col2, col3 = st.columns(
+        3
+    )
 
     with col1:
 
         st.metric(
-            "INTILED Score",
-            f"{score}/100"
+            "INTILED Radar Score",
+            f"{score:.0f}/100"
         )
 
     with col2:
 
         st.metric(
-            "Compatibilidad",
-            analisis[
-                "nivel_compatibilidad"
-            ].replace("_", " ")
+            "Afinidad",
+            nivel
         )
 
     with col3:
 
         st.metric(
-            "Brechas críticas",
-            resumen["criticos"]
+            "Acción preliminar",
+            recomendacion
         )
 
-    # ========================================================
-    # DECISIÓN
-    # ========================================================
-
-    st.write("")
-
-    codigo_decision = decision["codigo"]
-
-    mensaje_decision = (
-        f"{decision['semaforo']} "
-        f"{decision['decision']}"
+    st.progress(
+        score / 100
     )
 
-    if codigo_decision == "PRESENTARSE":
+    st.caption(
+        "Este indicador mide afinidad preliminar. "
+        "No confirma elegibilidad contractual."
+    )
 
-        st.success(
-            mensaje_decision
+
+# ============================================================
+# ADN INTILED
+# ============================================================
+
+def mostrar_adn_intiled(
+    oportunidad
+):
+
+    st.subheader(
+        "🧬 Coincidencias con el ADN INTILED"
+    )
+
+    coincidencias = (
+        obtener_coincidencias_adn(
+            oportunidad
+        )
+    )
+
+    if coincidencias:
+
+        columnas = st.columns(
+            2
         )
 
-    elif codigo_decision == "ALIADO":
+        for indice, coincidencia in enumerate(
+            coincidencias[:16]
+        ):
 
-        st.warning(
-            mensaje_decision
-        )
+            with columnas[
+                indice % 2
+            ]:
 
-    elif codigo_decision == "REVISION":
-
-        st.warning(
-            mensaje_decision
-        )
+                st.write(
+                    f"✓ {coincidencia}"
+                )
 
     else:
 
-        st.error(
-            mensaje_decision
+        st.info(
+            "El Radar no registró coincidencias "
+            "detalladas adicionales."
         )
 
-    st.write(
-        f"**Prioridad:** "
-        f"{decision['prioridad']}"
-    )
 
-    st.divider()
+# ============================================================
+# FACTORES ESTRATÉGICOS
+# ============================================================
 
-    # ========================================================
-    # FACTORES DEL SCORE
-    # ========================================================
+def mostrar_factores(
+    factores
+):
 
     st.subheader(
-        "📊 Factores de compatibilidad"
+        "📊 Factores estratégicos preliminares"
     )
 
-    nombres_factores = {
+    st.caption(
+        "Los factores marcados como no validados "
+        "serán reemplazados por datos reales después "
+        "del análisis de los pliegos y de la "
+        "Biblioteca INTILED."
+    )
+
+    nombres = {
 
         "afinidad":
-            "Afinidad con INTILED",
+            "Afinidad estratégica",
 
         "experiencia":
             "Experiencia empresarial",
@@ -306,7 +622,7 @@ def mostrar_analisis_intiled():
             "Requisitos habilitantes",
 
         "economico":
-            "Viabilidad económica",
+            "Capacidad económica",
 
         "ubicacion":
             "Capacidad territorial",
@@ -315,212 +631,377 @@ def mostrar_analisis_intiled():
             "Tiempo de preparación",
 
         "competitividad":
-            "Competitividad"
+            "Competitividad probable"
     }
 
-    for factor, datos in analisis[
-        "detalle_score"
-    ].items():
+    no_validados = [
 
-        nombre = nombres_factores.get(
-            factor,
-            factor
+        "experiencia",
+
+        "personal",
+
+        "habilitantes",
+
+        "economico",
+
+        "tiempo",
+
+        "competitividad"
+    ]
+
+    for clave, nombre in nombres.items():
+
+        valor = normalizar_score(
+            factores.get(
+                clave,
+                0
+            )
         )
 
-        valor = datos["valor"]
-
-        st.write(
-            f"**{nombre}: {valor}/100**"
+        col1, col2 = st.columns(
+            [3, 1]
         )
 
-        st.progress(
-            int(valor)
-        )
+        with col1:
 
-    st.divider()
-
-    # ========================================================
-    # MATRIZ DE REQUISITOS
-    # ========================================================
-
-    st.subheader(
-        "📋 Matriz de requisitos"
-    )
-
-    for resultado in resultados:
-
-        estado = resultado[
-            "estado"
-        ]
-
-        icono = icono_estado(
-            estado
-        )
-
-        with st.container(
-            border=True
-        ):
-
-            col1, col2 = st.columns(
-                [4, 1]
+            st.write(
+                f"**{nombre}**"
             )
 
-            with col1:
+            st.progress(
+                valor / 100
+            )
 
-                st.markdown(
-                    f"**{icono} "
-                    f"{resultado['requisito']}**"
-                )
+        with col2:
 
-                st.write(
-                    f"**Evidencia:** "
-                    f"{resultado['evidencia']}"
-                )
-
-                if resultado[
-                    "observacion"
-                ]:
-
-                    st.caption(
-                        resultado[
-                            "observacion"
-                        ]
-                    )
-
-            with col2:
+            if clave in no_validados:
 
                 st.write(
-                    f"**{estado.replace('_', ' ')}**"
+                    "⚪ Pendiente"
                 )
+
+            else:
 
                 st.write(
-                    f"Riesgo: "
-                    f"{resultado['riesgo']}"
+                    f"**{valor:.0f}/100**"
                 )
 
-                if resultado[
-                    "critico"
-                ]:
 
-                    st.error(
-                        "CRÍTICO"
-                    )
+# ============================================================
+# VALIDACIONES PENDIENTES
+# ============================================================
 
-    st.divider()
+def mostrar_validaciones_pendientes():
+
+    st.subheader(
+        "⚠️ Información que debemos validar"
+    )
+
+    st.warning(
+        "INTI todavía no ha leído los documentos "
+        "contractuales completos de esta oportunidad. "
+        "Por tanto, no puede afirmar que INTILED "
+        "cumpla los siguientes requisitos."
+    )
+
+    pendientes = [
+
+        "Experiencia contractual específica exigida.",
+
+        "Número y valor de contratos acreditables.",
+
+        "Experiencia específica del personal clave.",
+
+        "Indicadores financieros y organizacionales.",
+
+        "Requisitos jurídicos y habilitantes.",
+
+        "RUP, clasificaciones o códigos exigidos.",
+
+        "Especificaciones técnicas obligatorias.",
+
+        "Certificaciones requeridas.",
+
+        "Cronograma real del proceso.",
+
+        "Factores que otorgan puntaje.",
+
+        "Causales de rechazo.",
+
+        "Necesidad de consorcio, unión temporal o aliado."
+    ]
+
+    for pendiente in pendientes:
+
+        st.write(
+            f"⚪ {pendiente}"
+        )
+
+
+# ============================================================
+# ESTRATEGIA PRELIMINAR
+# ============================================================
+
+def mostrar_estrategia_preliminar(
+    oportunidad
+):
+
+    score = normalizar_score(
+        oportunidad.get(
+            "radar_score",
+            0
+        )
+    )
+
+    st.subheader(
+        "🎯 Lectura estratégica preliminar"
+    )
+
+    if score >= 80:
+
+        st.success(
+            "La oportunidad presenta una afinidad "
+            "temática MUY ALTA con el ADN INTILED. "
+            "Se recomienda priorizar la obtención y "
+            "análisis de los documentos del proceso."
+        )
+
+    elif score >= 60:
+
+        st.success(
+            "La oportunidad presenta una afinidad "
+            "ALTA con INTILED. Conviene realizar "
+            "revisión documental antes de decidir "
+            "la participación."
+        )
+
+    elif score >= 40:
+
+        st.warning(
+            "La oportunidad presenta afinidad MEDIA. "
+            "Debe revisarse el pliego antes de dedicar "
+            "recursos importantes a la preparación."
+        )
+
+    else:
+
+        st.warning(
+            "La oportunidad presenta afinidad limitada. "
+            "No debería priorizarse sin una razón "
+            "estratégica adicional."
+        )
+
+    st.info(
+        "La decisión definitiva "
+        "**PRESENTARSE / PRESENTARSE CON ALIADO / "
+        "REVISIÓN ESTRATÉGICA / NO PRIORIZAR** "
+        "se generará cuando INTI tenga los requisitos "
+        "reales del proceso."
+    )
+
+
+# ============================================================
+# ACCIONES
+# ============================================================
+
+def mostrar_acciones(
+    oportunidad
+):
+
+    st.subheader(
+        "🚀 Siguiente etapa"
+    )
+
+    col1, col2, col3 = st.columns(
+        3
+    )
 
     # ========================================================
-    # FORTALEZAS Y BRECHAS
+    # DOCUMENTOS
     # ========================================================
-
-    col1, col2 = st.columns(2)
 
     with col1:
 
-        st.subheader(
-            "💪 Fortalezas"
-        )
+        if st.button(
+            "📑 Analizar pliegos / TDR",
+            use_container_width=True,
+            type="primary"
+        ):
 
-        fortalezas = analisis[
-            "fortalezas"
-        ]
+            st.session_state[
+                "oportunidad_seleccionada"
+            ] = oportunidad
 
-        if fortalezas:
+            st.session_state[
+                "analizar_documentos"
+            ] = True
 
-            for fortaleza in fortalezas:
-
-                st.success(
-                    f"✓ {fortaleza}"
-                )
-
-        else:
+            st.success(
+                "Oportunidad preparada para "
+                "el Analizador de documentos."
+            )
 
             st.info(
-                "No se identificaron "
-                "fortalezas suficientes."
+                "Abre '📑 Analizador de documentos' "
+                "desde el menú lateral."
             )
+
+    # ========================================================
+    # ALIANZA
+    # ========================================================
 
     with col2:
 
-        st.subheader(
-            "⚠️ Brechas"
-        )
+        if st.button(
+            "🤝 Evaluar posible alianza",
+            use_container_width=True
+        ):
 
-        brechas = analisis[
-            "brechas"
-        ]
-
-        if brechas:
-
-            for brecha in brechas:
-
-                if brecha[
-                    "critico"
-                ]:
-
-                    st.error(
-                        f"🔴 "
-                        f"{brecha['requisito']}"
-                    )
-
-                else:
-
-                    st.warning(
-                        f"🟡 "
-                        f"{brecha['requisito']}"
-                    )
-
-        else:
-
-            st.success(
-                "No se detectaron "
-                "brechas relevantes."
+            st.info(
+                "La necesidad de un aliado se determinará "
+                "después de identificar las brechas "
+                "contractuales reales."
             )
+
+    # ========================================================
+    # ESTRUCTURACIÓN
+    # ========================================================
+
+    with col3:
+
+        if st.button(
+            "🏗️ Preparar estructuración",
+            use_container_width=True
+        ):
+
+            st.session_state[
+                "iniciar_estructuracion"
+            ] = True
+
+            st.warning(
+                "Se recomienda completar primero "
+                "el análisis documental."
+            )
+
+
+# ============================================================
+# MÓDULO PRINCIPAL
+# ============================================================
+
+def mostrar_analisis_intiled():
+
+    # ========================================================
+    # ENCABEZADO
+    # ========================================================
+
+    st.title(
+        "🧠 Análisis Estratégico INTILED"
+    )
+
+    st.caption(
+        "Evaluación estratégica de oportunidades "
+        "mediante el ADN empresarial de INTILED."
+    )
 
     st.divider()
 
     # ========================================================
-    # ESTRATEGIA INTI
+    # VERIFICAR OPORTUNIDAD
     # ========================================================
 
-    st.subheader(
-        "🤖 Estrategia recomendada por INTI"
+    if (
+        "oportunidad_seleccionada"
+        not in st.session_state
+    ):
+
+        st.info(
+            "No existe una oportunidad seleccionada."
+        )
+
+        st.write(
+            "Ve al **🔎 Radar de oportunidades**, "
+            "selecciona un proceso y pulsa "
+            "**🧠 Analizar con INTI**."
+        )
+
+        return
+
+    # ========================================================
+    # OPORTUNIDAD REAL
+    # ========================================================
+
+    oportunidad = st.session_state[
+        "oportunidad_seleccionada"
+    ]
+
+    # ========================================================
+    # INFORMACIÓN
+    # ========================================================
+
+    mostrar_encabezado_oportunidad(
+        oportunidad
     )
 
-    st.info(
-        analisis[
-            "estrategia"
-        ]
+    st.divider()
+
+    # ========================================================
+    # RADAR SCORE
+    # ========================================================
+
+    mostrar_radar_score(
+        oportunidad
     )
 
-    st.write("")
+    st.divider()
+
+    # ========================================================
+    # ADN
+    # ========================================================
+
+    mostrar_adn_intiled(
+        oportunidad
+    )
+
+    st.divider()
+
+    # ========================================================
+    # FACTORES
+    # ========================================================
+
+    factores = (
+        construir_factores_preliminares(
+            oportunidad
+        )
+    )
+
+    mostrar_factores(
+        factores
+    )
+
+    st.divider()
+
+    # ========================================================
+    # VALIDACIONES
+    # ========================================================
+
+    mostrar_validaciones_pendientes()
+
+    st.divider()
+
+    # ========================================================
+    # ESTRATEGIA
+    # ========================================================
+
+    mostrar_estrategia_preliminar(
+        oportunidad
+    )
+
+    st.divider()
 
     # ========================================================
     # ACCIONES
     # ========================================================
 
-    st.subheader(
-        "🚀 Próximas acciones"
+    mostrar_acciones(
+        oportunidad
     )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.button(
-            "📄 Revisar documentos",
-            use_container_width=True
-        )
-
-    with col2:
-
-        st.button(
-            "🤝 Analizar alianza",
-            use_container_width=True
-        )
-
-    with col3:
-
-        st.button(
-            "🏗️ Iniciar estructuración",
-            use_container_width=True
-        )
