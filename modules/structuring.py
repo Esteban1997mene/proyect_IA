@@ -13,22 +13,25 @@ from services.structuring_engine import (
 # CENTRO DE ESTRUCTURACIÓN DE PROYECTOS
 # ============================================================
 #
-# Este módulo convierte una oportunidad seleccionada
-# en un proyecto estructurable dentro de INTI.
+# FLUJO IDEAL:
 #
-# FUENTES DE INFORMACIÓN:
+# Radar
+#   ↓
+# Oportunidad
+#   ↓
+# Análisis INTILED
+#   ↓
+# Analizador documental
+#   ↓
+# Estructuración
 #
-# 📥 CONVOCATORIA
-# Información proveniente de SECOP / TDR / Pliegos.
+# La estructuración puede trabajar en dos estados:
 #
-# 🏢 INTILED
-# Información corporativa validada.
+# 1. PREESTRUCTURACIÓN
+#    Basada en metadata + ADN INTILED.
 #
-# 🤖 INTI
-# Propuestas, cálculos y recomendaciones del sistema.
-#
-# ⚠️ PENDIENTE
-# Información que todavía debe ser validada.
+# 2. ESTRUCTURACIÓN VALIDADA
+#    Basada en TDR/pliegos/documentos analizados.
 #
 # ============================================================
 
@@ -42,7 +45,6 @@ def obtener_valor(
     campo,
     default="No informado"
 ):
-
     valor = oportunidad.get(campo)
 
     if valor is None or valor == "":
@@ -54,11 +56,35 @@ def obtener_valor(
 def obtener_id_oportunidad(oportunidad):
 
     return str(
-        oportunidad.get("id_proceso")
-        or oportunidad.get("referencia")
+        oportunidad.get("referencia")
+        or oportunidad.get("id_proceso")
+        or oportunidad.get("id")
         or oportunidad.get("titulo")
         or "proyecto_intiled"
     )
+
+
+def obtener_clave_documental(oportunidad):
+
+    return str(
+        oportunidad.get("referencia")
+        or oportunidad.get("id_proceso")
+        or oportunidad.get("titulo")
+        or ""
+    )
+
+
+def inicializar_widget(
+    clave,
+    valor=""
+):
+    """
+    Inicializa un widget únicamente cuando todavía
+    no existe en st.session_state.
+    """
+
+    if clave not in st.session_state:
+        st.session_state[clave] = valor or ""
 
 
 # ============================================================
@@ -71,12 +97,7 @@ def inicializar_proyecto(oportunidad):
         oportunidad
     )
 
-    # --------------------------------------------------------
-    # CREAR CONTENEDOR GENERAL
-    # --------------------------------------------------------
-
     if "proyectos_estructuracion" not in st.session_state:
-
         st.session_state[
             "proyectos_estructuracion"
         ] = {}
@@ -84,10 +105,6 @@ def inicializar_proyecto(oportunidad):
     proyectos = st.session_state[
         "proyectos_estructuracion"
     ]
-
-    # --------------------------------------------------------
-    # CREAR PROYECTO SI NO EXISTE
-    # --------------------------------------------------------
 
     if id_proyecto not in proyectos:
 
@@ -214,7 +231,7 @@ def inicializar_proyecto(oportunidad):
             },
 
             # =================================================
-            # ESTRUCTURACIÓN
+            # ESTRUCTURACIÓN TÉCNICA
             # =================================================
 
             "alcance":
@@ -266,6 +283,16 @@ def inicializar_proyecto(oportunidad):
                 [],
 
             # =================================================
+            # CONTROL
+            # =================================================
+
+            "preestructuracion_generada":
+                False,
+
+            "documentacion_validada":
+                False,
+
+            # =================================================
             # TRAZABILIDAD
             # =================================================
 
@@ -287,13 +314,66 @@ def inicializar_proyecto(oportunidad):
                     "PENDIENTE",
 
                 "metodologia":
+                    "PENDIENTE",
+
+                "edt":
+                    "PENDIENTE",
+
+                "cronograma":
+                    "PENDIENTE",
+
+                "equipo":
+                    "PENDIENTE",
+
+                "presupuesto":
+                    "PENDIENTE",
+
+                "riesgos":
+                    "PENDIENTE",
+
+                "indicadores":
                     "PENDIENTE"
             }
         }
 
+    # Actualizamos metadata de la oportunidad
+    proyectos[id_proyecto][
+        "oportunidad"
+    ] = oportunidad
+
     return proyectos[
         id_proyecto
     ]
+
+
+# ============================================================
+# BUSCAR ANÁLISIS DOCUMENTAL
+# ============================================================
+
+def obtener_analisis_documental(
+    oportunidad
+):
+
+    clave = obtener_clave_documental(
+        oportunidad
+    )
+
+    analisis_documentales = (
+        st.session_state.get(
+            "analisis_documentales",
+            {}
+        )
+    )
+
+    if not isinstance(
+        analisis_documentales,
+        dict
+    ):
+        return None
+
+    return analisis_documentales.get(
+        clave
+    )
 
 
 # ============================================================
@@ -304,7 +384,7 @@ def calcular_progreso(proyecto):
 
     secciones = {
 
-        "Ficha general":
+        "Ficha":
             bool(
                 proyecto.get(
                     "ficha",
@@ -415,18 +495,16 @@ def calcular_progreso(proyecto):
         secciones
     )
 
+    if total == 0:
+        return 0, secciones
+
     porcentaje = round(
-        (
-            completadas
-            / total
-        )
+        completadas
+        / total
         * 100
     )
 
-    return (
-        porcentaje,
-        secciones
-    )
+    return porcentaje, secciones
 
 
 # ============================================================
@@ -445,7 +523,7 @@ def mostrar_cabecera(proyecto):
 
     st.caption(
         "Construcción técnica, metodológica, "
-        "económica y estratégica del proyecto."
+        "económica y estratégica de proyectos INTILED."
     )
 
     st.divider()
@@ -457,18 +535,23 @@ def mostrar_cabecera(proyecto):
     )
 
     st.markdown(
-        f"### {titulo}"
+        f"## {titulo}"
     )
 
-    st.write("")
+    referencia = obtener_valor(
+        oportunidad,
+        "referencia",
+        ""
+    )
+
+    if referencia:
+        st.caption(
+            f"Proceso: {referencia}"
+        )
 
     col1, col2, col3, col4 = st.columns(
         4
     )
-
-    # --------------------------------------------------------
-    # RADAR SCORE
-    # --------------------------------------------------------
 
     with col1:
 
@@ -482,10 +565,6 @@ def mostrar_cabecera(proyecto):
             f"{score}/100"
         )
 
-    # --------------------------------------------------------
-    # ENTIDAD
-    # --------------------------------------------------------
-
     with col2:
 
         st.metric(
@@ -495,10 +574,6 @@ def mostrar_cabecera(proyecto):
                 "entidad"
             )
         )
-
-    # --------------------------------------------------------
-    # PRESUPUESTO
-    # --------------------------------------------------------
 
     with col3:
 
@@ -510,10 +585,6 @@ def mostrar_cabecera(proyecto):
             )
         )
 
-    # --------------------------------------------------------
-    # ESTADO
-    # --------------------------------------------------------
-
     with col4:
 
         st.metric(
@@ -522,20 +593,6 @@ def mostrar_cabecera(proyecto):
                 "estado",
                 "PREESTRUCTURACIÓN"
             )
-        )
-
-    # --------------------------------------------------------
-    # REFERENCIA
-    # --------------------------------------------------------
-
-    referencia = oportunidad.get(
-        "referencia"
-    )
-
-    if referencia:
-
-        st.caption(
-            f"Referencia del proceso: {referencia}"
         )
 
 
@@ -592,6 +649,173 @@ def mostrar_progreso(proyecto):
 
 
 # ============================================================
+# ESTADO DOCUMENTAL
+# ============================================================
+
+def mostrar_estado_documental(
+    proyecto
+):
+
+    oportunidad = proyecto[
+        "oportunidad"
+    ]
+
+    analisis = obtener_analisis_documental(
+        oportunidad
+    )
+
+    st.subheader(
+        "📑 Documentación contractual"
+    )
+
+    # ========================================================
+    # SIN DOCUMENTACIÓN
+    # ========================================================
+
+    if not analisis:
+
+        proyecto[
+            "documentacion_validada"
+        ] = False
+
+        st.warning(
+            "⚠️ INTI todavía no dispone de los TDR, "
+            "pliegos o anexos analizados para esta "
+            "convocatoria."
+        )
+
+        st.write(
+            "Puedes realizar una preestructuración "
+            "preliminar, pero para construir una propuesta "
+            "contractualmente sólida primero deben "
+            "analizarse los documentos oficiales."
+        )
+
+        col1, col2 = st.columns(
+            [2, 1]
+        )
+
+        with col1:
+
+            if st.button(
+                "📑 Cargar y analizar pliegos / TDR",
+                type="primary",
+                use_container_width=True,
+                key=f"tdr_{proyecto['id']}"
+            ):
+
+                st.session_state[
+                    "oportunidad_seleccionada"
+                ] = oportunidad
+
+                st.session_state[
+                    "analizar_documentos"
+                ] = True
+
+                st.session_state[
+                    "navegar_a"
+                ] = "📑 Analizador de documentos"
+
+                st.rerun()
+
+        with col2:
+
+            st.caption(
+                "Recomendado antes de continuar "
+                "con la propuesta definitiva."
+            )
+
+        return False
+
+    # ========================================================
+    # DOCUMENTACIÓN DISPONIBLE
+    # ========================================================
+
+    proyecto[
+        "documentacion_validada"
+    ] = True
+
+    st.success(
+        "✅ INTI encontró información documental "
+        "asociada a esta convocatoria."
+    )
+
+    documentos = analisis.get(
+        "documentos",
+        []
+    )
+
+    porcentaje = analisis.get(
+        "porcentaje_analisis"
+    )
+
+    col1, col2, col3 = st.columns(
+        3
+    )
+
+    with col1:
+
+        st.metric(
+            "Documentos",
+            len(documentos)
+        )
+
+    with col2:
+
+        if porcentaje is None:
+
+            st.metric(
+                "Análisis documental",
+                "Disponible"
+            )
+
+        else:
+
+            st.metric(
+                "Análisis documental",
+                f"{porcentaje}%"
+            )
+
+    with col3:
+
+        bid_score = analisis.get(
+            "bid_score"
+        )
+
+        if bid_score is None:
+
+            st.metric(
+                "Bid Score",
+                "Pendiente"
+            )
+
+        else:
+
+            st.metric(
+                "Bid Score",
+                f"{bid_score}/100"
+            )
+
+    if st.button(
+        "📑 Revisar documentos analizados",
+        use_container_width=True,
+        key=f"revisar_tdr_{proyecto['id']}"
+    ):
+
+        st.session_state[
+            "oportunidad_seleccionada"
+        ] = oportunidad
+
+        st.session_state[
+            "navegar_a"
+        ] = "📑 Analizador de documentos"
+
+        st.rerun()
+
+    return True
+
+
+# ============================================================
 # TIPO DE ESTRUCTURACIÓN
 # ============================================================
 
@@ -604,21 +828,13 @@ def mostrar_tipo_estructuracion(
     )
 
     opciones = [
-
         "Oferta / contratación pública",
-
         "Suministro e instalación",
-
         "Consultoría",
-
         "Interventoría",
-
         "Proyecto privado",
-
         "Proyecto de inversión pública",
-
         "Proyecto de cooperación",
-
         "Proyecto interno INTILED"
     ]
 
@@ -628,15 +844,22 @@ def mostrar_tipo_estructuracion(
     )
 
     if actual not in opciones:
-
         actual = opciones[0]
+
+    clave = (
+        f"tipo_estructuracion_"
+        f"{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        actual
+    )
 
     tipo = st.selectbox(
         "Seleccione el tipo de proyecto",
         opciones,
-        index=opciones.index(
-            actual
-        )
+        key=clave
     )
 
     proyecto[
@@ -649,9 +872,8 @@ def mostrar_tipo_estructuracion(
     ):
 
         st.info(
-            "Este proyecto podrá posteriormente "
-            "sincronizarse con el módulo "
-            "🇨🇴 Proyectos públicos / MGA."
+            "🇨🇴 Este proyecto podrá conectarse "
+            "posteriormente con el módulo MGA."
         )
 
 
@@ -667,29 +889,43 @@ def mostrar_generador_inti(
         "🤖 Preestructuración asistida por INTI"
     )
 
-    st.write(
-        "INTI puede preparar un borrador inicial "
-        "utilizando la información disponible de "
-        "la oportunidad y el ADN empresarial "
-        "de INTILED."
+    documentacion = proyecto.get(
+        "documentacion_validada",
+        False
     )
 
-    st.warning(
-        "El contenido generado es una "
-        "**propuesta de trabajo**. "
-        "No reemplaza los pliegos, TDR, "
-        "estudios previos ni documentos "
-        "oficiales del proceso."
-    )
+    if documentacion:
 
-    # --------------------------------------------------------
-    # BOTÓN
-    # --------------------------------------------------------
+        st.success(
+            "📑 Existen documentos asociados al proyecto. "
+            "En la siguiente evolución del motor, INTI "
+            "utilizará directamente la información "
+            "extraída de esos documentos."
+        )
+
+    else:
+
+        st.warning(
+            "Esta generación utilizará únicamente la "
+            "información disponible de la oportunidad "
+            "y el ADN INTILED. El resultado será "
+            "un **borrador preliminar**."
+        )
+
+    texto_boton = (
+        "🤖 Regenerar preestructuración con INTI"
+        if proyecto.get(
+            "preestructuracion_generada"
+        )
+        else
+        "🤖 Generar preestructuración con INTI"
+    )
 
     if st.button(
-        "🤖 Generar preestructuración con INTI",
+        texto_boton,
         type="primary",
-        use_container_width=True
+        use_container_width=True,
+        key=f"generar_inti_{proyecto['id']}"
     ):
 
         oportunidad = proyecto[
@@ -697,8 +933,8 @@ def mostrar_generador_inti(
         ]
 
         with st.spinner(
-            "INTI está construyendo la "
-            "preestructuración del proyecto..."
+            "INTI está estructurando "
+            "el proyecto..."
         ):
 
             resultado = (
@@ -711,151 +947,203 @@ def mostrar_generador_inti(
         # DIAGNÓSTICO
         # ====================================================
 
-        diagnostico = resultado[
-            "diagnostico"
-        ]
+        diagnostico = resultado.get(
+            "diagnostico",
+            {}
+        )
+
+        problema = diagnostico.get(
+            "problema",
+            ""
+        )
+
+        necesidad = diagnostico.get(
+            "necesidad",
+            ""
+        )
+
+        justificacion = diagnostico.get(
+            "justificacion",
+            ""
+        )
 
         proyecto[
             "diagnostico"
         ][
             "problema"
-        ] = diagnostico.get(
-            "problema",
-            ""
-        )
+        ] = problema
 
         proyecto[
             "diagnostico"
         ][
             "necesidad"
-        ] = diagnostico.get(
-            "necesidad",
-            ""
-        )
+        ] = necesidad
 
         proyecto[
             "diagnostico"
         ][
             "justificacion"
-        ] = diagnostico.get(
-            "justificacion",
-            ""
-        )
+        ] = justificacion
 
         # ====================================================
         # OBJETIVOS
         # ====================================================
 
-        objetivos = resultado[
-            "objetivos"
-        ]
+        objetivos = resultado.get(
+            "objetivos",
+            {}
+        )
+
+        objetivo_general = objetivos.get(
+            "general",
+            ""
+        )
+
+        objetivos_especificos = (
+            lista_a_texto(
+                objetivos.get(
+                    "especificos",
+                    []
+                )
+            )
+        )
 
         proyecto[
             "objetivos"
         ][
             "general"
-        ] = objetivos.get(
-            "general",
-            ""
-        )
+        ] = objetivo_general
 
         proyecto[
             "objetivos"
         ][
             "especificos"
-        ] = lista_a_texto(
-            objetivos.get(
-                "especificos",
-                []
-            )
-        )
+        ] = objetivos_especificos
 
         # ====================================================
         # ALCANCE
         # ====================================================
 
-        alcance = resultado[
-            "alcance"
-        ]
+        alcance = resultado.get(
+            "alcance",
+            {}
+        )
 
-        proyecto[
-            "alcance"
-        ] = lista_a_texto(
+        alcance_texto = lista_a_texto(
             alcance.get(
                 "componentes",
                 []
             )
         )
 
+        proyecto[
+            "alcance"
+        ] = alcance_texto
+
         # ====================================================
         # SOLUCIÓN TÉCNICA
         # ====================================================
 
-        solucion = resultado[
-            "solucion_tecnica"
-        ]
+        solucion = resultado.get(
+            "solucion_tecnica",
+            {}
+        )
 
-        proyecto[
-            "solucion_tecnica"
-        ] = solucion.get(
+        solucion_texto = solucion.get(
             "texto",
             ""
         )
+
+        proyecto[
+            "solucion_tecnica"
+        ] = solucion_texto
 
         # ====================================================
         # METODOLOGÍA
         # ====================================================
 
-        metodologia = resultado[
-            "metodologia"
-        ]
+        metodologia = resultado.get(
+            "metodologia",
+            {}
+        )
+
+        metodologia_texto = (
+            metodologia_a_texto(
+                metodologia.get(
+                    "fases",
+                    []
+                )
+            )
+        )
 
         proyecto[
             "metodologia"
-        ] = metodologia_a_texto(
-            metodologia.get(
-                "fases",
-                []
-            )
-        )
+        ] = metodologia_texto
+
+        # ====================================================
+        # SINCRONIZAR WIDGETS
+        # ====================================================
+
+        st.session_state[
+            f"problema_{proyecto['id']}"
+        ] = problema
+
+        st.session_state[
+            f"necesidad_{proyecto['id']}"
+        ] = necesidad
+
+        st.session_state[
+            f"justificacion_{proyecto['id']}"
+        ] = justificacion
+
+        st.session_state[
+            f"objetivo_general_{proyecto['id']}"
+        ] = objetivo_general
+
+        st.session_state[
+            f"objetivos_especificos_{proyecto['id']}"
+        ] = objetivos_especificos
+
+        st.session_state[
+            f"alcance_{proyecto['id']}"
+        ] = alcance_texto
+
+        st.session_state[
+            f"solucion_{proyecto['id']}"
+        ] = solucion_texto
+
+        st.session_state[
+            f"metodologia_{proyecto['id']}"
+        ] = metodologia_texto
 
         # ====================================================
         # TRAZABILIDAD
         # ====================================================
 
-        proyecto[
-            "origen_contenido"
-        ][
-            "diagnostico"
-        ] = "PROPUESTA_INTI"
+        origen = (
+            "PROPUESTA_INTI"
+            if not documentacion
+            else
+            "PROPUESTA_INTI_PENDIENTE_VALIDACION_DOCUMENTAL"
+        )
 
-        proyecto[
-            "origen_contenido"
-        ][
-            "objetivos"
-        ] = "PROPUESTA_INTI"
-
-        proyecto[
-            "origen_contenido"
-        ][
-            "alcance"
-        ] = "PROPUESTA_INTI"
-
-        proyecto[
-            "origen_contenido"
-        ][
-            "solucion_tecnica"
-        ] = "PROPUESTA_INTI"
-
-        proyecto[
-            "origen_contenido"
-        ][
+        for seccion in [
+            "diagnostico",
+            "objetivos",
+            "alcance",
+            "solucion_tecnica",
             "metodologia"
-        ] = "PROPUESTA_INTI"
+        ]:
 
-        # ====================================================
-        # ESTADO
-        # ====================================================
+            proyecto[
+                "origen_contenido"
+            ][
+                seccion
+            ] = origen
+
+        proyecto[
+            "preestructuracion_generada"
+        ] = True
 
         proyecto[
             "estado"
@@ -865,25 +1153,11 @@ def mostrar_generador_inti(
             "ultima_actualizacion"
         ] = datetime.now().isoformat()
 
-        # ====================================================
-        # RESULTADO
-        # ====================================================
-
-        st.success(
-            "Preestructuración generada correctamente."
-        )
-
-        st.info(
-            "Revisa las pestañas Diagnóstico, "
-            "Objetivos, Alcance, Solución técnica "
-            "y Metodología."
-        )
-
         st.rerun()
 
 
 # ============================================================
-# FICHA GENERAL
+# FICHA
 # ============================================================
 
 def mostrar_ficha(
@@ -894,27 +1168,69 @@ def mostrar_ficha(
         "📋 Ficha general"
     )
 
+    st.caption(
+        "📥 Información precargada desde "
+        "la convocatoria seleccionada."
+    )
+
     ficha = proyecto[
         "ficha"
     ]
 
-    st.caption(
-        "📥 Los datos precargados provienen "
-        "de la oportunidad detectada."
-    )
+    campos = {
+        "nombre":
+            "Nombre del proyecto",
+
+        "entidad":
+            "Entidad / cliente",
+
+        "pais":
+            "País",
+
+        "departamento":
+            "Departamento / región",
+
+        "municipio":
+            "Municipio / ciudad",
+
+        "sector":
+            "Sector",
+
+        "presupuesto":
+            "Presupuesto de referencia",
+
+        "modalidad":
+            "Modalidad",
+
+        "fecha_cierre":
+            "Fecha de cierre",
+
+        "referencia":
+            "Referencia del proceso"
+    }
 
     # --------------------------------------------------------
     # NOMBRE
     # --------------------------------------------------------
 
-    nombre = st.text_area(
-        "Nombre del proyecto",
-        value=ficha.get(
+    clave_nombre = (
+        f"ficha_nombre_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave_nombre,
+        ficha.get(
             "nombre",
             ""
-        ),
-        height=100,
-        key=f"ficha_nombre_{proyecto['id']}"
+        )
+    )
+
+    ficha[
+        "nombre"
+    ] = st.text_area(
+        "Nombre del proyecto",
+        key=clave_nombre,
+        height=100
     )
 
     # --------------------------------------------------------
@@ -925,125 +1241,71 @@ def mostrar_ficha(
         2
     )
 
+    campos_col1 = [
+        "entidad",
+        "pais",
+        "departamento",
+        "presupuesto"
+    ]
+
+    campos_col2 = [
+        "municipio",
+        "sector",
+        "modalidad",
+        "fecha_cierre"
+    ]
+
     with col1:
 
-        entidad = st.text_input(
-            "Entidad / cliente",
-            value=ficha.get(
-                "entidad",
-                ""
-            ),
-            key=f"ficha_entidad_{proyecto['id']}"
-        )
+        for campo in campos_col1:
 
-        pais = st.text_input(
-            "País",
-            value=ficha.get(
-                "pais",
-                ""
-            ),
-            key=f"ficha_pais_{proyecto['id']}"
-        )
+            clave = (
+                f"ficha_{campo}_"
+                f"{proyecto['id']}"
+            )
 
-        departamento = st.text_input(
-            "Departamento / región",
-            value=ficha.get(
-                "departamento",
-                ""
-            ),
-            key=f"ficha_departamento_{proyecto['id']}"
-        )
-
-        presupuesto = st.text_input(
-            "Presupuesto de referencia",
-            value=str(
-                ficha.get(
-                    "presupuesto",
-                    ""
+            inicializar_widget(
+                clave,
+                str(
+                    ficha.get(
+                        campo,
+                        ""
+                    )
                 )
-            ),
-            key=f"ficha_presupuesto_{proyecto['id']}"
-        )
+            )
+
+            ficha[
+                campo
+            ] = st.text_input(
+                campos[campo],
+                key=clave
+            )
 
     with col2:
 
-        municipio = st.text_input(
-            "Municipio / ciudad",
-            value=ficha.get(
-                "municipio",
-                ""
-            ),
-            key=f"ficha_municipio_{proyecto['id']}"
-        )
+        for campo in campos_col2:
 
-        sector = st.text_input(
-            "Sector",
-            value=ficha.get(
-                "sector",
-                ""
-            ),
-            key=f"ficha_sector_{proyecto['id']}"
-        )
+            clave = (
+                f"ficha_{campo}_"
+                f"{proyecto['id']}"
+            )
 
-        modalidad = st.text_input(
-            "Modalidad",
-            value=ficha.get(
-                "modalidad",
-                ""
-            ),
-            key=f"ficha_modalidad_{proyecto['id']}"
-        )
-
-        fecha_cierre = st.text_input(
-            "Fecha de cierre",
-            value=str(
-                ficha.get(
-                    "fecha_cierre",
-                    ""
+            inicializar_widget(
+                clave,
+                str(
+                    ficha.get(
+                        campo,
+                        ""
+                    )
                 )
-            ),
-            key=f"ficha_fecha_{proyecto['id']}"
-        )
+            )
 
-    # --------------------------------------------------------
-    # GUARDAR
-    # --------------------------------------------------------
-
-    ficha[
-        "nombre"
-    ] = nombre
-
-    ficha[
-        "entidad"
-    ] = entidad
-
-    ficha[
-        "pais"
-    ] = pais
-
-    ficha[
-        "departamento"
-    ] = departamento
-
-    ficha[
-        "municipio"
-    ] = municipio
-
-    ficha[
-        "sector"
-    ] = sector
-
-    ficha[
-        "modalidad"
-    ] = modalidad
-
-    ficha[
-        "presupuesto"
-    ] = presupuesto
-
-    ficha[
-        "fecha_cierre"
-    ] = fecha_cierre
+            ficha[
+                campo
+            ] = st.text_input(
+                campos[campo],
+                key=clave
+            )
 
 
 # ============================================================
@@ -1066,18 +1328,14 @@ def mostrar_diagnostico(
         "PENDIENTE"
     )
 
-    if origen == "PROPUESTA_INTI":
+    if origen.startswith(
+        "PROPUESTA_INTI"
+    ):
 
         st.warning(
-            "🤖 **Origen:** Propuesta INTI. "
-            "Debe validarse con los documentos "
-            "oficiales del proceso."
-        )
-
-    else:
-
-        st.caption(
-            "⚠️ Información pendiente de estructuración."
+            "🤖 Contenido propuesto por INTI. "
+            "Debe contrastarse con los documentos "
+            "oficiales de la convocatoria."
         )
 
     diagnostico = proyecto[
@@ -1088,52 +1346,76 @@ def mostrar_diagnostico(
     # PROBLEMA
     # --------------------------------------------------------
 
+    clave = (
+        f"problema_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        diagnostico.get(
+            "problema",
+            ""
+        )
+    )
+
     diagnostico[
         "problema"
     ] = st.text_area(
         "Problema central",
-        value=diagnostico.get(
-            "problema",
-            ""
-        ),
+        key=clave,
         height=180,
         placeholder=(
             "Describe el problema que origina "
             "la necesidad del proyecto..."
-        ),
-        key=f"problema_{proyecto['id']}"
+        )
     )
 
     # --------------------------------------------------------
     # NECESIDAD
     # --------------------------------------------------------
 
+    clave = (
+        f"necesidad_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        diagnostico.get(
+            "necesidad",
+            ""
+        )
+    )
+
     diagnostico[
         "necesidad"
     ] = st.text_area(
         "Necesidad identificada",
-        value=diagnostico.get(
-            "necesidad",
-            ""
-        ),
-        height=160,
-        key=f"necesidad_{proyecto['id']}"
+        key=clave,
+        height=170
     )
 
     # --------------------------------------------------------
     # JUSTIFICACIÓN
     # --------------------------------------------------------
 
+    clave = (
+        f"justificacion_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        diagnostico.get(
+            "justificacion",
+            ""
+        )
+    )
+
     diagnostico[
         "justificacion"
     ] = st.text_area(
         "Justificación",
-        value=diagnostico.get(
-            "justificacion",
-            ""
-        ),
-        height=200,
-        key=f"justificacion_{proyecto['id']}"
+        key=clave,
+        height=220
     )
 
 
@@ -1157,12 +1439,14 @@ def mostrar_objetivos(
         "PENDIENTE"
     )
 
-    if origen == "PROPUESTA_INTI":
+    if origen.startswith(
+        "PROPUESTA_INTI"
+    ):
 
         st.warning(
             "🤖 Objetivos propuestos por INTI. "
-            "Requieren revisión antes de incorporarse "
-            "a una propuesta oficial."
+            "Deben validarse antes de incorporarlos "
+            "a la propuesta definitiva."
         )
 
     objetivos = proyecto[
@@ -1173,37 +1457,53 @@ def mostrar_objetivos(
     # GENERAL
     # --------------------------------------------------------
 
+    clave = (
+        f"objetivo_general_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        objetivos.get(
+            "general",
+            ""
+        )
+    )
+
     objetivos[
         "general"
     ] = st.text_area(
         "Objetivo general",
-        value=objetivos.get(
-            "general",
-            ""
-        ),
-        height=150,
-        key=f"objetivo_general_{proyecto['id']}"
+        key=clave,
+        height=160
     )
 
     # --------------------------------------------------------
     # ESPECÍFICOS
     # --------------------------------------------------------
 
+    clave = (
+        f"objetivos_especificos_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        objetivos.get(
+            "especificos",
+            ""
+        )
+    )
+
     objetivos[
         "especificos"
     ] = st.text_area(
         "Objetivos específicos",
-        value=objetivos.get(
-            "especificos",
-            ""
-        ),
-        height=260,
+        key=clave,
+        height=280,
         placeholder=(
             "1. ...\n"
             "2. ...\n"
             "3. ..."
-        ),
-        key=f"objetivos_especificos_{proyecto['id']}"
+        )
     )
 
 
@@ -1227,27 +1527,37 @@ def mostrar_alcance(
         "PENDIENTE"
     )
 
-    if origen == "PROPUESTA_INTI":
+    if origen.startswith(
+        "PROPUESTA_INTI"
+    ):
 
         st.warning(
             "🤖 Alcance preliminar generado por INTI. "
             "Debe compararse con el alcance contractual."
         )
 
+    clave = (
+        f"alcance_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        proyecto.get(
+            "alcance",
+            ""
+        )
+    )
+
     proyecto[
         "alcance"
     ] = st.text_area(
         "Alcance técnico del proyecto",
-        value=proyecto.get(
-            "alcance",
-            ""
-        ),
-        height=350,
+        key=clave,
+        height=380,
         placeholder=(
-            "Define qué incluye y qué no incluye "
-            "la intervención..."
-        ),
-        key=f"alcance_{proyecto['id']}"
+            "Define qué incluye, entregables, "
+            "límites y exclusiones del proyecto..."
+        )
     )
 
 
@@ -1271,30 +1581,34 @@ def mostrar_solucion_tecnica(
         "PENDIENTE"
     )
 
-    if origen == "PROPUESTA_INTI":
+    if origen.startswith(
+        "PROPUESTA_INTI"
+    ):
 
         st.warning(
-            "🤖 Solución técnica preliminar propuesta "
-            "por INTI. No representa todavía una "
-            "especificación contractual."
+            "🤖 Solución preliminar propuesta por INTI. "
+            "Las cantidades, potencias, equipos y "
+            "especificaciones deben validarse."
         )
 
-    st.caption(
-        "🏢 Posteriormente este componente se cruzará "
-        "con productos, tecnologías y capacidades "
-        "validadas de INTILED."
+    clave = (
+        f"solucion_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        proyecto.get(
+            "solucion_tecnica",
+            ""
+        )
     )
 
     proyecto[
         "solucion_tecnica"
     ] = st.text_area(
         "Descripción de la solución",
-        value=proyecto.get(
-            "solucion_tecnica",
-            ""
-        ),
-        height=400,
-        key=f"solucion_{proyecto['id']}"
+        key=clave,
+        height=420
     )
 
 
@@ -1318,28 +1632,34 @@ def mostrar_metodologia(
         "PENDIENTE"
     )
 
-    if origen == "PROPUESTA_INTI":
+    if origen.startswith(
+        "PROPUESTA_INTI"
+    ):
 
         st.warning(
             "🤖 Metodología preliminar propuesta "
-            "por INTI. Las fases deberán ajustarse "
-            "al cronograma y requisitos oficiales."
+            "por INTI. Debe ajustarse a los TDR, "
+            "plazos y entregables reales."
         )
+
+    clave = (
+        f"metodologia_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        proyecto.get(
+            "metodologia",
+            ""
+        )
+    )
 
     proyecto[
         "metodologia"
     ] = st.text_area(
         "Metodología propuesta",
-        value=proyecto.get(
-            "metodologia",
-            ""
-        ),
-        height=500,
-        placeholder=(
-            "Describe fases, actividades, "
-            "controles, entregables y metodología..."
-        ),
-        key=f"metodologia_{proyecto['id']}"
+        key=clave,
+        height=500
     )
 
 
@@ -1347,7 +1667,7 @@ def mostrar_metodologia(
 # PLANIFICACIÓN
 # ============================================================
 
-def mostrar_modulos_avanzados(
+def mostrar_planificacion(
     proyecto
 ):
 
@@ -1355,15 +1675,15 @@ def mostrar_modulos_avanzados(
         "🧩 Planificación del proyecto"
     )
 
-    st.write(
-        "En esta etapa INTI incorporará los motores "
-        "especializados para convertir la propuesta "
-        "conceptual en un proyecto ejecutable."
-    )
+    if not proyecto.get(
+        "documentacion_validada"
+    ):
 
-    # --------------------------------------------------------
-    # PRIMERA FILA
-    # --------------------------------------------------------
+        st.warning(
+            "Para generar una EDT, cronograma, "
+            "presupuesto y equipo confiables se "
+            "recomienda analizar primero los TDR."
+        )
 
     col1, col2, col3 = st.columns(
         3
@@ -1377,49 +1697,35 @@ def mostrar_modulos_avanzados(
             "subactividades y entregables."
         )
 
+        st.info(
+            "### 💰 Presupuesto\n\n"
+            "Personal, equipos, materiales, "
+            "logística, impuestos, AIU "
+            "e imprevistos."
+        )
+
     with col2:
 
         st.info(
             "### 📅 Cronograma\n\n"
             "Fases, duración, dependencias, "
-            "hitos y ruta de ejecución."
+            "hitos y entregables."
+        )
+
+        st.info(
+            "### ⚠️ Riesgos\n\n"
+            "Riesgos técnicos, financieros, "
+            "jurídicos, operacionales "
+            "y contractuales."
         )
 
     with col3:
 
         st.info(
             "### 👷 Equipo\n\n"
-            "Perfiles profesionales, dedicaciones, "
-            "responsabilidades y experiencia."
+            "Perfiles, dedicaciones, experiencia "
+            "y responsabilidades."
         )
-
-    # --------------------------------------------------------
-    # SEGUNDA FILA
-    # --------------------------------------------------------
-
-    col4, col5, col6 = st.columns(
-        3
-    )
-
-    with col4:
-
-        st.info(
-            "### 💰 Presupuesto\n\n"
-            "Personal, materiales, equipos, "
-            "logística, AIU, impuestos "
-            "e imprevistos."
-        )
-
-    with col5:
-
-        st.info(
-            "### ⚠️ Riesgos\n\n"
-            "Riesgos técnicos, financieros, "
-            "jurídicos, ambientales "
-            "y operacionales."
-        )
-
-    with col6:
 
         st.info(
             "### 📈 Indicadores\n\n"
@@ -1427,9 +1733,9 @@ def mostrar_modulos_avanzados(
             "gestión e impacto."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # SOSTENIBILIDAD
-    # --------------------------------------------------------
+    # ========================================================
 
     st.divider()
 
@@ -1437,20 +1743,29 @@ def mostrar_modulos_avanzados(
         "🌱 Sostenibilidad"
     )
 
+    clave = (
+        f"sostenibilidad_{proyecto['id']}"
+    )
+
+    inicializar_widget(
+        clave,
+        proyecto.get(
+            "sostenibilidad",
+            ""
+        )
+    )
+
     proyecto[
         "sostenibilidad"
     ] = st.text_area(
         "Estrategia de sostenibilidad",
-        value=proyecto.get(
-            "sostenibilidad",
-            ""
-        ),
-        height=180,
+        key=clave,
+        height=200,
         placeholder=(
-            "Operación, mantenimiento, sostenibilidad "
-            "técnica, financiera, ambiental y social..."
-        ),
-        key=f"sostenibilidad_{proyecto['id']}"
+            "Operación, mantenimiento, "
+            "sostenibilidad técnica, económica, "
+            "ambiental y social..."
+        )
     )
 
 
@@ -1463,13 +1778,12 @@ def mostrar_trazabilidad(
 ):
 
     st.subheader(
-        "🔎 Trazabilidad de información"
+        "🔎 Trazabilidad"
     )
 
     st.write(
-        "INTI diferencia el origen de la información "
-        "para evitar mezclar datos oficiales con "
-        "supuestos o propuestas generadas."
+        "INTI diferencia permanentemente "
+        "el origen de cada dato."
     )
 
     col1, col2, col3, col4 = st.columns(
@@ -1480,7 +1794,7 @@ def mostrar_trazabilidad(
 
         st.info(
             "📥 **CONVOCATORIA**\n\n"
-            "SECOP, pliegos, TDR, anexos "
+            "SECOP, TDR, pliegos, anexos "
             "y documentos oficiales."
         )
 
@@ -1489,34 +1803,26 @@ def mostrar_trazabilidad(
         st.success(
             "🏢 **INTILED**\n\n"
             "Experiencia, personal, productos "
-            "y documentos corporativos validados."
+            "y documentación corporativa."
         )
 
     with col3:
 
         st.warning(
             "🤖 **PROPUESTA INTI**\n\n"
-            "Análisis, cálculos, borradores "
-            "y recomendaciones generadas."
+            "Borradores, análisis, cálculos "
+            "y recomendaciones."
         )
 
     with col4:
 
         st.error(
             "⚠️ **PENDIENTE**\n\n"
-            "Información que requiere "
-            "verificación o soporte."
+            "Dato que todavía necesita "
+            "verificación."
         )
 
-    # --------------------------------------------------------
-    # ESTADO DE SECCIONES
-    # --------------------------------------------------------
-
     st.divider()
-
-    st.write(
-        "### Estado actual de la información"
-    )
 
     origenes = proyecto.get(
         "origen_contenido",
@@ -1526,19 +1832,17 @@ def mostrar_trazabilidad(
     for seccion, origen in origenes.items():
 
         if origen == "CONVOCATORIA":
-
             icono = "📥"
 
         elif origen == "INTILED":
-
             icono = "🏢"
 
-        elif origen == "PROPUESTA_INTI":
-
+        elif origen.startswith(
+            "PROPUESTA_INTI"
+        ):
             icono = "🤖"
 
         else:
-
             icono = "⚠️"
 
         nombre = (
@@ -1556,7 +1860,7 @@ def mostrar_trazabilidad(
 
 
 # ============================================================
-# GUARDADO
+# GUARDAR
 # ============================================================
 
 def mostrar_guardado(
@@ -1571,15 +1875,15 @@ def mostrar_guardado(
 
     with col1:
 
-        st.caption(
-            "En esta versión el proyecto se conserva "
-            "durante la sesión activa de Streamlit. "
-            "Posteriormente conectaremos este módulo "
-            "con la base de datos de INTI."
-        )
-
         ultima = proyecto.get(
             "ultima_actualizacion"
+        )
+
+        st.caption(
+            "Actualmente el proyecto se conserva "
+            "en la sesión de Streamlit. "
+            "Posteriormente será persistido "
+            "en la base de datos."
         )
 
         if ultima:
@@ -1602,8 +1906,7 @@ def mostrar_guardado(
             ] = datetime.now().isoformat()
 
             st.success(
-                "Avance guardado correctamente "
-                "durante la sesión."
+                "Avance guardado correctamente."
             )
 
 
@@ -1628,7 +1931,7 @@ def mostrar_estructuracion():
 
         st.caption(
             "Construcción técnica, metodológica, "
-            "económica y estratégica del proyecto."
+            "económica y estratégica."
         )
 
         st.divider()
@@ -1639,8 +1942,8 @@ def mostrar_estructuracion():
 
         st.write(
             "Ve al **🔎 Radar de oportunidades**, "
-            "selecciona un proceso y después regresa "
-            "a **🏗️ Estructuración**."
+            "selecciona un proceso y después "
+            "regresa a este módulo."
         )
 
         return
@@ -1654,7 +1957,7 @@ def mostrar_estructuracion():
     ]
 
     # ========================================================
-    # CREAR / RECUPERAR PROYECTO
+    # PROYECTO
     # ========================================================
 
     proyecto = inicializar_proyecto(
@@ -1682,7 +1985,17 @@ def mostrar_estructuracion():
     st.divider()
 
     # ========================================================
-    # TIPO DE ESTRUCTURACIÓN
+    # DOCUMENTACIÓN
+    # ========================================================
+
+    mostrar_estado_documental(
+        proyecto
+    )
+
+    st.divider()
+
+    # ========================================================
+    # TIPO
     # ========================================================
 
     mostrar_tipo_estructuracion(
@@ -1692,7 +2005,7 @@ def mostrar_estructuracion():
     st.divider()
 
     # ========================================================
-    # GENERADOR INTI
+    # GENERACIÓN INTI
     # ========================================================
 
     mostrar_generador_inti(
@@ -1718,19 +2031,11 @@ def mostrar_estructuracion():
         ]
     )
 
-    # --------------------------------------------------------
-    # FICHA
-    # --------------------------------------------------------
-
     with tabs[0]:
 
         mostrar_ficha(
             proyecto
         )
-
-    # --------------------------------------------------------
-    # DIAGNÓSTICO
-    # --------------------------------------------------------
 
     with tabs[1]:
 
@@ -1738,19 +2043,11 @@ def mostrar_estructuracion():
             proyecto
         )
 
-    # --------------------------------------------------------
-    # OBJETIVOS
-    # --------------------------------------------------------
-
     with tabs[2]:
 
         mostrar_objetivos(
             proyecto
         )
-
-    # --------------------------------------------------------
-    # ALCANCE
-    # --------------------------------------------------------
 
     with tabs[3]:
 
@@ -1758,19 +2055,11 @@ def mostrar_estructuracion():
             proyecto
         )
 
-    # --------------------------------------------------------
-    # SOLUCIÓN TÉCNICA
-    # --------------------------------------------------------
-
     with tabs[4]:
 
         mostrar_solucion_tecnica(
             proyecto
         )
-
-    # --------------------------------------------------------
-    # METODOLOGÍA
-    # --------------------------------------------------------
 
     with tabs[5]:
 
@@ -1778,19 +2067,11 @@ def mostrar_estructuracion():
             proyecto
         )
 
-    # --------------------------------------------------------
-    # PLANIFICACIÓN
-    # --------------------------------------------------------
-
     with tabs[6]:
 
-        mostrar_modulos_avanzados(
+        mostrar_planificacion(
             proyecto
         )
-
-    # --------------------------------------------------------
-    # TRAZABILIDAD
-    # --------------------------------------------------------
 
     with tabs[7]:
 
