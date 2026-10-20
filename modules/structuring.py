@@ -1,7 +1,10 @@
 import streamlit as st
 from datetime import datetime
-
-
+from services.structuring_engine import (
+    generar_prestructuracion,
+    lista_a_texto,
+    metodologia_a_texto
+)
 # ============================================================
 # INTI PROJECTS AI
 # CENTRO DE ESTRUCTURACIÓN DE PROYECTOS
