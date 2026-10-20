@@ -1,24 +1,43 @@
+# ============================================================
+# INTI PROJECTS AI
+# SERVICIO SECOP II - COLOMBIA
+# ============================================================
+#
+# Consulta procesos publicados en SECOP II mediante
+# Datos Abiertos Colombia / API Socrata.
+#
+# Este módulo:
+# 1. Consulta oportunidades reales.
+# 2. Busca por líneas estratégicas INTILED.
+# 3. Normaliza los resultados.
+# 4. Elimina duplicados.
+# 5. Entrega información al Radar INTI.
+#
+# IMPORTANTE:
+# Este módulo NO determina todavía si INTILED cumple
+# los requisitos habilitantes de una convocatoria.
+# ============================================================
+
+
 import requests
 from datetime import datetime, timedelta
 
 
-# =========================================================
-# CONFIGURACIÓN SECOP II
-# =========================================================
+# ============================================================
+# CONFIGURACIÓN SECOP
+# ============================================================
 
-SECOP_DATASET_ID = "p6dx-8zbt"
-
-SECOP_API_URL = (
-    f"https://www.datos.gov.co/resource/"
-    f"{SECOP_DATASET_ID}.json"
+SECOP_URL = (
+    "https://www.datos.gov.co/resource/"
+    "p6dx-8zbt.json"
 )
 
 TIMEOUT = 30
 
 
-# =========================================================
-# PALABRAS CLAVE POR LÍNEA INTILED
-# =========================================================
+# ============================================================
+# PALABRAS DE BÚSQUEDA POR SECTOR
+# ============================================================
 
 PALABRAS_SECTOR = {
 
@@ -28,46 +47,52 @@ PALABRAS_SECTOR = {
         "fotovoltaica",
         "panel solar",
         "paneles solares",
-        "sistema fotovoltaico",
-        "energía solar"
+        "sistema solar",
+        "sistemas solares"
     ],
 
     "Alumbrado público": [
-        "alumbrado público",
         "alumbrado publico",
+        "alumbrado público",
         "luminaria",
         "luminarias",
-        "iluminación pública",
-        "iluminacion publica"
+        "iluminacion exterior",
+        "iluminación exterior",
+        "luminaria solar",
+        "luminarias solares"
     ],
 
     "Transición energética": [
-        "transición energética",
         "transicion energetica",
-        "energías renovables",
+        "transición energética",
         "energias renovables",
-        "descarbonización",
-        "descarbonizacion"
+        "energías renovables",
+        "descarbonizacion",
+        "descarbonización"
     ],
 
     "Eficiencia energética": [
-        "eficiencia energética",
         "eficiencia energetica",
-        "ahorro energético",
+        "eficiencia energética",
         "ahorro energetico",
-        "gestión energética",
-        "gestion energetica"
+        "ahorro energético",
+        "gestion energetica",
+        "gestión energética"
     ],
 
     "Infraestructura eléctrica": [
-        "infraestructura eléctrica",
         "infraestructura electrica",
-        "red eléctrica",
+        "infraestructura eléctrica",
         "red electrica",
-        "subestación",
+        "red eléctrica",
+        "redes electricas",
+        "redes eléctricas",
         "subestacion",
-        "instalaciones eléctricas",
-        "instalaciones electricas"
+        "subestación",
+        "media tension",
+        "media tensión",
+        "baja tension",
+        "baja tensión"
     ],
 
     "Smart Cities": [
@@ -79,91 +104,69 @@ PALABRAS_SECTOR = {
 
     "IoT y telegestión": [
         "iot",
-        "internet de las cosas",
-        "telegestión",
         "telegestion",
-        "telemetría",
+        "telegestión",
         "telemetria",
-        "monitoreo remoto"
+        "telemetría",
+        "monitoreo remoto",
+        "control remoto"
     ],
 
     "Comunidades energéticas": [
-        "comunidad energética",
-        "comunidades energéticas",
         "comunidad energetica",
-        "comunidades energeticas"
+        "comunidad energética",
+        "comunidades energeticas",
+        "comunidades energéticas"
     ],
 
     "Consultoría": [
-        "consultoría",
         "consultoria",
-        "estudios",
-        "diseños"
+        "consultoría"
     ],
 
     "Interventoría": [
-        "interventoría",
-        "interventoria"
+        "interventoria",
+        "interventoría"
     ],
 
     "Estudios técnicos": [
-        "estudio técnico",
-        "estudios técnicos",
         "estudio tecnico",
+        "estudio técnico",
         "estudios tecnicos",
-        "diseño eléctrico",
-        "diseño electrico"
+        "estudios técnicos",
+        "diagnostico energetico",
+        "diagnóstico energético"
     ],
 
     "Tecnología e innovación": [
-        "innovación",
         "innovacion",
-        "tecnología",
+        "innovación",
         "tecnologia",
-        "transformación digital",
-        "transformacion digital"
+        "tecnología",
+        "automatizacion",
+        "automatización"
     ]
 }
 
 
-# =========================================================
-# LIMPIAR TEXTO
-# =========================================================
+# ============================================================
+# LIMPIAR TEXTO PARA CONSULTAS SOCRATA
+# ============================================================
 
-def limpiar_texto(texto):
+def limpiar_texto_socrata(texto):
 
-    if texto is None:
+    if not texto:
         return ""
 
-    return str(texto).strip()
+    return str(texto).replace(
+        "'",
+        "''"
+    ).strip()
 
 
-# =========================================================
-# NORMALIZAR SECTOR
-# =========================================================
-
-def obtener_palabras_sector(sectores):
-
-    palabras = []
-
-    for sector in sectores:
-
-        palabras_sector = PALABRAS_SECTOR.get(
-            sector,
-            []
-        )
-
-        palabras.extend(
-            palabras_sector
-        )
-
-    # Eliminar duplicados
-    return list(dict.fromkeys(palabras))
-
-
-# =========================================================
-# CONSTRUIR FILTRO DE BÚSQUEDA
-# =========================================================
+# ============================================================
+# CONSTRUIR CONSULTA DE PALABRAS
+# ============================================================
 
 def construir_filtro_palabras(palabras):
 
@@ -171,367 +174,650 @@ def construir_filtro_palabras(palabras):
 
     for palabra in palabras:
 
-        palabra_segura = palabra.replace(
-            "'",
-            "''"
-        )
+        palabra = limpiar_texto_socrata(
+            palabra
+        ).lower()
 
-        condicion = (
-            "lower(descripci_n_del_procedimiento) "
-            f"like '%{palabra_segura.lower()}%'"
-        )
+        if not palabra:
+            continue
 
         condiciones.append(
-            condicion
+            "lower(descripci_n_del_procedimiento) "
+            f"like '%{palabra}%'"
         )
 
     if not condiciones:
         return ""
 
-    return "(" + " OR ".join(condiciones) + ")"
+    return "(" + " OR ".join(
+        condiciones
+    ) + ")"
 
 
-# =========================================================
-# CONSULTAR SECOP
-# =========================================================
+# ============================================================
+# OBTENER PALABRAS DE LOS SECTORES SELECCIONADOS
+# ============================================================
 
-def consultar_secop(
+def obtener_palabras_busqueda(
     sectores,
-    limite=50,
-    dias_atras=120
+    palabras_adicionales=None
 ):
 
-    palabras = obtener_palabras_sector(
-        sectores
-    )
-
-    if not palabras:
-        return []
-
-    filtro_palabras = construir_filtro_palabras(
-        palabras
-    )
-
-    # Buscar principalmente procesos recientes
-    fecha_desde = (
-        datetime.now()
-        - timedelta(days=dias_atras)
-    ).strftime("%Y-%m-%dT00:00:00")
-
-    filtro_fecha = (
-        f"fecha_de_publicacion_del >= "
-        f"'{fecha_desde}'"
-    )
-
-    where = (
-        f"{filtro_palabras} "
-        f"AND {filtro_fecha}"
-    )
-
-    params = {
-        "$limit": limite,
-        "$where": where,
-        "$order": "fecha_de_publicacion_del DESC"
-    }
-
-    try:
-
-        respuesta = requests.get(
-            SECOP_API_URL,
-            params=params,
-            timeout=TIMEOUT
-        )
-
-        respuesta.raise_for_status()
-
-        datos = respuesta.json()
-
-        return normalizar_resultados(
-            datos,
-            sectores
-        )
-
-    except requests.exceptions.Timeout:
-
-        raise Exception(
-            "SECOP tardó demasiado tiempo "
-            "en responder."
-        )
-
-    except requests.exceptions.ConnectionError:
-
-        raise Exception(
-            "No fue posible conectarse con "
-            "Datos Abiertos de Colombia."
-        )
-
-    except requests.exceptions.HTTPError:
-
-        detalle = ""
-
-        try:
-            detalle = respuesta.text[:500]
-        except Exception:
-            pass
-
-        raise Exception(
-            "SECOP respondió con un error HTTP. "
-            + detalle
-        )
-
-    except Exception as error:
-
-        raise Exception(
-            f"Error consultando SECOP: {error}"
-        )
-
-
-# =========================================================
-# IDENTIFICAR SECTOR
-# =========================================================
-
-def identificar_sector(texto, sectores):
-
-    texto = limpiar_texto(
-        texto
-    ).lower()
+    palabras = []
 
     for sector in sectores:
 
-        palabras = PALABRAS_SECTOR.get(
-            sector,
-            []
+        palabras.extend(
+            PALABRAS_SECTOR.get(
+                sector,
+                []
+            )
         )
 
-        for palabra in palabras:
+    if palabras_adicionales:
 
-            if palabra.lower() in texto:
-                return sector
+        if isinstance(
+            palabras_adicionales,
+            str
+        ):
 
-    return (
-        sectores[0]
-        if sectores
-        else "No identificado"
+            adicionales = [
+                palabra.strip()
+                for palabra
+                in palabras_adicionales.split(",")
+                if palabra.strip()
+            ]
+
+            palabras.extend(
+                adicionales
+            )
+
+        elif isinstance(
+            palabras_adicionales,
+            list
+        ):
+
+            palabras.extend(
+                palabras_adicionales
+            )
+
+    # Eliminar duplicados conservando orden
+
+    return list(
+        dict.fromkeys(
+            palabras
+        )
     )
 
 
-# =========================================================
-# FORMATEAR VALOR
-# =========================================================
+# ============================================================
+# CONVERTIR VALORES NUMÉRICOS
+# ============================================================
 
-def formatear_valor(valor):
+def convertir_numero(valor):
 
-    if valor in [
-        None,
-        "",
-        "No definido"
-    ]:
-        return "No disponible"
+    if valor is None:
+        return 0
 
     try:
+        return float(valor)
 
-        numero = float(valor)
-
-        return (
-            "$"
-            + f"{numero:,.0f}"
-            .replace(",", ".")
-            + " COP"
-        )
-
-    except Exception:
-
-        return str(valor)
+    except (
+        TypeError,
+        ValueError
+    ):
+        return 0
 
 
-# =========================================================
+# ============================================================
+# FORMATEAR DINERO
+# ============================================================
+
+def formatear_cop(valor):
+
+    numero = convertir_numero(
+        valor
+    )
+
+    if numero <= 0:
+        return "No informado"
+
+    return (
+        "$"
+        + f"{numero:,.0f}"
+        .replace(",", ".")
+        + " COP"
+    )
+
+
+# ============================================================
 # FORMATEAR FECHA
-# =========================================================
+# ============================================================
 
 def formatear_fecha(fecha):
 
     if not fecha:
-        return "No disponible"
+        return "No informada"
 
     try:
 
-        fecha_objeto = datetime.fromisoformat(
+        fecha_obj = datetime.fromisoformat(
             fecha.replace(
                 "Z",
                 "+00:00"
             )
         )
 
-        return fecha_objeto.strftime(
+        return fecha_obj.strftime(
             "%d/%m/%Y"
         )
 
-    except Exception:
+    except (
+        ValueError,
+        TypeError
+    ):
 
-        return fecha
+        return str(fecha)
 
 
-# =========================================================
-# NORMALIZAR RESULTADOS
-# =========================================================
+# ============================================================
+# DETECTAR SECTOR DEL RESULTADO
+# ============================================================
 
-def normalizar_resultados(
-    datos,
-    sectores
+def detectar_sector(texto):
+
+    texto = (
+        texto
+        or ""
+    ).lower()
+
+    mejores_sectores = []
+
+    mejor_puntaje = 0
+
+    for sector, palabras in (
+        PALABRAS_SECTOR.items()
+    ):
+
+        puntaje = 0
+
+        for palabra in palabras:
+
+            if palabra.lower() in texto:
+                puntaje += 1
+
+        if puntaje > mejor_puntaje:
+
+            mejor_puntaje = puntaje
+
+            mejores_sectores = [
+                sector
+            ]
+
+        elif (
+            puntaje > 0
+            and puntaje == mejor_puntaje
+        ):
+
+            mejores_sectores.append(
+                sector
+            )
+
+    if not mejores_sectores:
+        return "Otros"
+
+    return ", ".join(
+        mejores_sectores
+    )
+
+
+# ============================================================
+# NORMALIZAR RESULTADO SECOP
+# ============================================================
+
+def normalizar_proceso(
+    proceso
 ):
 
-    oportunidades = []
+    descripcion = proceso.get(
+        "descripci_n_del_procedimiento",
+        ""
+    )
 
-    for item in datos:
+    entidad = proceso.get(
+        "entidad",
+        "No informada"
+    )
 
-        descripcion = limpiar_texto(
-            item.get(
-                "descripci_n_del_procedimiento"
-            )
+    referencia = proceso.get(
+        "referencia_del_proceso",
+        "Sin referencia"
+    )
+
+    id_proceso = (
+        proceso.get(
+            "id_del_proceso"
         )
-
-        referencia = limpiar_texto(
-            item.get(
-                "referencia_del_proceso"
-            )
+        or proceso.get(
+            "proceso_de_compra"
         )
+        or referencia
+    )
 
-        entidad = limpiar_texto(
-            item.get(
-                "entidad"
-            )
+    valor = convertir_numero(
+        proceso.get(
+            "precio_base",
+            0
         )
+    )
 
-        departamento = limpiar_texto(
-            item.get(
-                "departamento_entidad"
-            )
-        )
+    fecha_publicacion = proceso.get(
+        "fecha_de_publicacion_del"
+    )
 
-        ciudad = limpiar_texto(
-            item.get(
-                "ciudad_entidad"
-            )
-        )
-
-        modalidad = limpiar_texto(
-            item.get(
-                "modalidad_de_contratacion"
-            )
-        )
-
-        estado = limpiar_texto(
-            item.get(
-                "estado_del_procedimiento"
-            )
-        )
-
-        valor = item.get(
-            "precio_base"
-        )
-
-        fecha_publicacion = item.get(
-            "fecha_de_publicacion_del"
-        )
-
-        fecha_recepcion = item.get(
+    fecha_cierre = (
+        proceso.get(
             "fecha_de_recepcion_de"
         )
-
-        id_proceso = limpiar_texto(
-            item.get(
-                "id_del_proceso"
-            )
+        or proceso.get(
+            "fecha_de_recepcion_de_respuestas"
         )
+    )
 
-        url_proceso = ""
-
-        url_objeto = item.get(
+    url = (
+        proceso.get(
             "urlproceso"
         )
-
-        if isinstance(
-            url_objeto,
-            dict
-        ):
-
-            url_proceso = url_objeto.get(
-                "url",
-                ""
-            )
-
-        elif isinstance(
-            url_objeto,
-            str
-        ):
-
-            url_proceso = url_objeto
-
-        sector = identificar_sector(
-            descripcion,
-            sectores
+        or proceso.get(
+            "url_proceso"
         )
+        or ""
+    )
 
-        oportunidad = {
+    texto_sector = (
+        f"{descripcion} "
+        f"{proceso.get('modalidad_de_contratacion', '')}"
+    )
 
-            # Compatibilidad con radar.py
-            "pais": "Colombia",
+    return {
 
-            "fuente": "SECOP II",
+        "pais":
+            "🇨🇴 Colombia",
 
-            "sector": sector,
+        "fuente":
+            "SECOP II",
 
-            "titulo": (
-                descripcion
-                if descripcion
-                else referencia
+        "id_proceso":
+            str(id_proceso),
+
+        "referencia":
+            referencia,
+
+        "titulo":
+            descripcion
+            if descripcion
+            else referencia,
+
+        "proyecto":
+            descripcion
+            if descripcion
+            else referencia,
+
+        "descripcion":
+            descripcion,
+
+        "entidad":
+            entidad,
+
+        "sector":
+            detectar_sector(
+                texto_sector
             ),
 
-            "url": url_proceso,
-
-            "fecha_deteccion": (
-                datetime.now()
-                .strftime("%d/%m/%Y %H:%M")
+        "departamento":
+            proceso.get(
+                "departamento_entidad",
+                "No informado"
             ),
 
-            # Información SECOP
-            "entidad": entidad,
+        "ciudad":
+            proceso.get(
+                "ciudad_entidad",
+                "No informada"
+            ),
 
-            "referencia": referencia,
+        "modalidad":
+            proceso.get(
+                "modalidad_de_contratacion",
+                "No informada"
+            ),
 
-            "id_proceso": id_proceso,
+        "estado":
+            proceso.get(
+                "estado_del_procedimiento",
+                "No informado"
+            ),
 
-            "departamento": departamento,
+        "valor_numerico":
+            valor,
 
-            "ciudad": ciudad,
-
-            "modalidad": modalidad,
-
-            "estado": estado,
-
-            "valor": formatear_valor(
+        "valor":
+            formatear_cop(
                 valor
             ),
 
-            "valor_numerico": valor,
-
-            "fecha_publicacion": (
-                formatear_fecha(
-                    fecha_publicacion
-                )
+        "presupuesto":
+            formatear_cop(
+                valor
             ),
 
-            "fecha_cierre": (
-                formatear_fecha(
-                    fecha_recepcion
-                )
+        "fecha_publicacion":
+            formatear_fecha(
+                fecha_publicacion
             ),
 
-            "descripcion": descripcion
-        }
+        "fecha_publicacion_raw":
+            fecha_publicacion,
 
-        oportunidades.append(
+        "fecha_cierre":
+            formatear_fecha(
+                fecha_cierre
+            ),
+
+        "cierre":
+            formatear_fecha(
+                fecha_cierre
+            ),
+
+        "fecha_cierre_raw":
+            fecha_cierre,
+
+        "url":
+            url,
+
+        "fecha_deteccion":
+            datetime.now().isoformat(),
+
+        # Todavía NO afirmamos elegibilidad
+
+        "elegibilidad":
+            "PENDIENTE_ANALISIS",
+
+        "score_validado":
+            None
+    }
+
+
+# ============================================================
+# ELIMINAR DUPLICADOS
+# ============================================================
+
+def eliminar_duplicados(
+    oportunidades
+):
+
+    resultados = []
+
+    vistos = set()
+
+    for oportunidad in oportunidades:
+
+        clave = (
+            oportunidad.get(
+                "id_proceso"
+            )
+            or oportunidad.get(
+                "url"
+            )
+            or oportunidad.get(
+                "referencia"
+            )
+            or oportunidad.get(
+                "titulo"
+            )
+        )
+
+        clave = str(
+            clave
+        ).strip().lower()
+
+        if not clave:
+            continue
+
+        if clave in vistos:
+            continue
+
+        vistos.add(
+            clave
+        )
+
+        resultados.append(
             oportunidad
         )
 
+    return resultados
+
+
+# ============================================================
+# CONSULTAR SECOP
+# ============================================================
+
+def consultar_secop(
+    sectores,
+    palabras_adicionales=None,
+    dias_atras=90,
+    limite=100
+):
+
+    # --------------------------------------------------------
+    # OBTENER PALABRAS
+    # --------------------------------------------------------
+
+    palabras = obtener_palabras_busqueda(
+        sectores,
+        palabras_adicionales
+    )
+
+    if not palabras:
+
+        return []
+
+
+    # --------------------------------------------------------
+    # FILTRO DE PALABRAS
+    # --------------------------------------------------------
+
+    filtro_palabras = (
+        construir_filtro_palabras(
+            palabras
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # FECHA MÍNIMA
+    # --------------------------------------------------------
+
+    fecha_minima = (
+        datetime.now()
+        - timedelta(
+            days=dias_atras
+        )
+    ).strftime(
+        "%Y-%m-%dT00:00:00.000"
+    )
+
+
+    # --------------------------------------------------------
+    # CONSULTA WHERE
+    # --------------------------------------------------------
+
+    condiciones = [
+
+        filtro_palabras,
+
+        (
+            "fecha_de_publicacion_del "
+            f">= '{fecha_minima}'"
+        )
+    ]
+
+    where = " AND ".join(
+        condicion
+        for condicion in condiciones
+        if condicion
+    )
+
+
+    # --------------------------------------------------------
+    # PARÁMETROS SOCRATA
+    # --------------------------------------------------------
+
+    params = {
+
+        "$limit":
+            limite,
+
+        "$order":
+            "fecha_de_publicacion_del DESC",
+
+        "$where":
+            where
+    }
+
+
+    # --------------------------------------------------------
+    # SOLICITUD
+    # --------------------------------------------------------
+
+    try:
+
+        response = requests.get(
+            SECOP_URL,
+            params=params,
+            timeout=TIMEOUT
+        )
+
+        response.raise_for_status()
+
+        datos = response.json()
+
+    except requests.exceptions.Timeout:
+
+        print(
+            "INTI: SECOP no respondió "
+            "dentro del tiempo esperado."
+        )
+
+        return []
+
+    except requests.exceptions.RequestException as error:
+
+        print(
+            "INTI: Error consultando SECOP:",
+            error
+        )
+
+        return []
+
+    except ValueError:
+
+        print(
+            "INTI: SECOP devolvió una "
+            "respuesta no válida."
+        )
+
+        return []
+
+
+    # --------------------------------------------------------
+    # NORMALIZACIÓN
+    # --------------------------------------------------------
+
+    oportunidades = []
+
+    for proceso in datos:
+
+        try:
+
+            oportunidad = (
+                normalizar_proceso(
+                    proceso
+                )
+            )
+
+            oportunidades.append(
+                oportunidad
+            )
+
+        except Exception as error:
+
+            print(
+                "INTI: Error normalizando "
+                "proceso SECOP:",
+                error
+            )
+
+
+    # --------------------------------------------------------
+    # DUPLICADOS
+    # --------------------------------------------------------
+
+    oportunidades = eliminar_duplicados(
+        oportunidades
+    )
+
     return oportunidades
+
+
+# ============================================================
+# PRUEBA DIRECTA
+# ============================================================
+
+if __name__ == "__main__":
+
+    resultados = consultar_secop(
+
+        sectores=[
+            "Energía solar",
+            "Alumbrado público",
+            "Eficiencia energética"
+        ],
+
+        dias_atras=60,
+
+        limite=20
+    )
+
+    print(
+        "\nOportunidades encontradas:",
+        len(resultados)
+    )
+
+    for oportunidad in resultados[:5]:
+
+        print("\n")
+
+        print(
+            oportunidad[
+                "entidad"
+            ]
+        )
+
+        print(
+            oportunidad[
+                "titulo"
+            ]
+        )
+
+        print(
+            oportunidad[
+                "valor"
+            ]
+        )
+
+        print(
+            oportunidad[
+                "fecha_cierre"
+            ]
+        )
