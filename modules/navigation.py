@@ -2,17 +2,18 @@ import streamlit as st
 
 
 OPCIONES_MENU = [
-    "🏠 Dashboard",
-    "🔎 Radar de oportunidades",
-    "🎯 Oportunidades",
-    "🧠 Análisis INTILED",
-    "📑 Analizador de documentos",
-    "🏗️ Estructuración",
-    "🇨🇴 Proyectos públicos / MGA",
-    "📚 Investigación",
-    "📄 Generador de propuestas",
-    "🏢 Biblioteca INTILED",
-    "📊 Seguimiento"
+    "Dashboard",
+    "Radar de oportunidades",
+    "Oportunidades",
+    "Análisis INTILED",
+    "Analizador de documentos",
+    "Portafolio INTILED"
+    "Estructuración",
+    "Proyectos públicos / MGA",
+    "Investigación",
+    "Generador de propuestas",
+    "Biblioteca INTILED",
+    "Seguimiento"
 ]
 
 
