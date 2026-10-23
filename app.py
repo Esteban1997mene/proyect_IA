@@ -1,15 +1,27 @@
 import streamlit as st
 
 # ============================================================
+# INTI PROJECTS AI
+# APLICACIÓN PRINCIPAL
+# INTILED SAS BIC
+# ============================================================
+
+
+# ============================================================
 # IMPORTACIÓN DE MÓDULOS
 # ============================================================
 
 from modules.navigation import mostrar_menu
+
 from modules.dashboard import mostrar_dashboard
 from modules.radar import mostrar_radar
 from modules.opportunities import mostrar_oportunidades
-from modules.analyzer import mostrar_analizador
 from modules.intiled_analysis import mostrar_analisis_intiled
+from modules.analyzer import mostrar_analizador
+
+# NUEVO MÓDULO
+from modules.portfolio import mostrar_portafolio
+
 from modules.structuring import mostrar_estructuracion
 from modules.mga import mostrar_mga
 from modules.research import mostrar_investigacion
@@ -19,7 +31,7 @@ from modules.tracking import mostrar_seguimiento
 
 
 # ============================================================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN GENERAL DE STREAMLIT
 # ============================================================
 
 st.set_page_config(
@@ -38,7 +50,9 @@ st.markdown(
     """
     <style>
 
-    /* Ocultar menú de Streamlit */
+    /* ======================================================
+       OCULTAR ELEMENTOS NATIVOS DE STREAMLIT
+       ====================================================== */
 
     #MainMenu {
         visibility: hidden;
@@ -49,7 +63,9 @@ st.markdown(
     }
 
 
-    /* Contenedor principal */
+    /* ======================================================
+       CONTENEDOR PRINCIPAL
+       ====================================================== */
 
     .block-container {
         padding-top: 2rem;
@@ -58,7 +74,9 @@ st.markdown(
     }
 
 
-    /* Sidebar */
+    /* ======================================================
+       SIDEBAR
+       ====================================================== */
 
     [data-testid="stSidebar"] {
         min-width: 280px;
@@ -66,7 +84,9 @@ st.markdown(
     }
 
 
-    /* Botones */
+    /* ======================================================
+       BOTONES
+       ====================================================== */
 
     .stButton > button {
         border-radius: 8px;
@@ -74,14 +94,18 @@ st.markdown(
     }
 
 
-    /* Métricas */
+    /* ======================================================
+       MÉTRICAS
+       ====================================================== */
 
     [data-testid="stMetric"] {
         border-radius: 10px;
     }
 
 
-    /* Separación títulos */
+    /* ======================================================
+       TÍTULOS
+       ====================================================== */
 
     h1 {
         margin-bottom: 0.5rem;
@@ -93,6 +117,33 @@ st.markdown(
 
     h3 {
         margin-top: 0.5rem;
+    }
+
+
+    /* ======================================================
+       FORMULARIOS
+       ====================================================== */
+
+    [data-testid="stForm"] {
+        border-radius: 12px;
+    }
+
+
+    /* ======================================================
+       DATAFRAME
+       ====================================================== */
+
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
+    }
+
+
+    /* ======================================================
+       CONTENEDORES
+       ====================================================== */
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 12px;
     }
 
     </style>
@@ -110,7 +161,7 @@ if "ingreso" not in st.session_state:
 
 
 # ============================================================
-# PORTADA
+# PORTADA PRINCIPAL
 # ============================================================
 
 def mostrar_portada():
@@ -124,9 +175,9 @@ def mostrar_portada():
 
     with col2:
 
-        # ----------------------------------------------------
-        # LOGO
-        # ----------------------------------------------------
+        # ====================================================
+        # LOGO INTILED
+        # ====================================================
 
         try:
 
@@ -140,28 +191,32 @@ def mostrar_portada():
             pass
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # TÍTULO
-        # ----------------------------------------------------
+        # ====================================================
 
         st.markdown(
             """
-            <h1 style="
-                text-align:center;
-                font-size:50px;
-                margin-bottom:5px;
-            ">
+            <h1
+                style="
+                    text-align:center;
+                    font-size:50px;
+                    margin-bottom:5px;
+                "
+            >
                 INTI PROJECTS AI
             </h1>
 
-            <p style="
-                text-align:center;
-                font-size:21px;
-                color:#777777;
-                margin-top:0px;
-            ">
-                Inteligencia para transformar oportunidades
-                en proyectos.
+            <p
+                style="
+                    text-align:center;
+                    font-size:21px;
+                    color:#777777;
+                    margin-top:0px;
+                "
+            >
+                Inteligencia para transformar
+                oportunidades en proyectos.
             </p>
             """,
             unsafe_allow_html=True
@@ -170,9 +225,9 @@ def mostrar_portada():
         st.write("")
 
 
-        # ----------------------------------------------------
-        # BOTÓN INGRESO
-        # ----------------------------------------------------
+        # ====================================================
+        # BOTÓN DE INGRESO
+        # ====================================================
 
         if st.button(
             "⚡ Ingresar a la plataforma",
@@ -185,19 +240,22 @@ def mostrar_portada():
             st.rerun()
 
 
-        # ----------------------------------------------------
-        # PIE DE PORTADA
-        # ----------------------------------------------------
+        # ====================================================
+        # INFORMACIÓN INSTITUCIONAL
+        # ====================================================
 
         st.markdown(
             """
-            <p style="
-                text-align:center;
-                margin-top:50px;
-                color:#888888;
-                font-size:13px;
-            ">
-                Plataforma interna de inteligencia de proyectos
+            <p
+                style="
+                    text-align:center;
+                    margin-top:50px;
+                    color:#888888;
+                    font-size:13px;
+                "
+            >
+                Plataforma interna de inteligencia
+                de proyectos
                 <br>
                 INTILED SAS BIC
             </p>
@@ -212,9 +270,9 @@ def mostrar_portada():
 
 def ejecutar_aplicacion():
 
-    # --------------------------------------------------------
+    # ========================================================
     # MENÚ LATERAL
-    # --------------------------------------------------------
+    # ========================================================
 
     opcion = mostrar_menu()
 
@@ -247,7 +305,7 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
-    # ANÁLISIS ESTRATÉGICO INTILED
+    # ANÁLISIS INTILED
     # ========================================================
 
     elif opcion == "🧠 Análisis INTILED":
@@ -265,6 +323,15 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
+    # PORTAFOLIO INTILED
+    # ========================================================
+
+    elif opcion == "📊 Portafolio INTILED":
+
+        mostrar_portafolio()
+
+
+    # ========================================================
     # ESTRUCTURACIÓN
     # ========================================================
 
@@ -274,7 +341,7 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
-    # MGA
+    # PROYECTOS PÚBLICOS / MGA
     # ========================================================
 
     elif opcion == "🇨🇴 Proyectos públicos / MGA":
@@ -319,7 +386,7 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
-    # OPCIÓN NO RECONOCIDA
+    # OPCIÓN NO DISPONIBLE
     # ========================================================
 
     else:
