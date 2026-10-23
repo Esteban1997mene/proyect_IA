@@ -13,20 +13,29 @@ import streamlit as st
 
 from modules.navigation import mostrar_menu
 
+# Inicio
 from modules.dashboard import mostrar_dashboard
+
+# Oportunidades
 from modules.radar import mostrar_radar
 from modules.opportunities import mostrar_oportunidades
 from modules.intiled_analysis import mostrar_analisis_intiled
 from modules.analyzer import mostrar_analizador
 
-# NUEVO MÓDULO
+# Gestión interna
 from modules.portfolio import mostrar_portafolio
+from modules.meetings import mostrar_reuniones
 
+# Estructuración
 from modules.structuring import mostrar_estructuracion
 from modules.mga import mostrar_mga
+
+# Inteligencia y documentación
 from modules.research import mostrar_investigacion
 from modules.proposals import mostrar_propuestas
 from modules.library import mostrar_biblioteca
+
+# Seguimiento
 from modules.tracking import mostrar_seguimiento
 
 
@@ -79,8 +88,8 @@ st.markdown(
        ====================================================== */
 
     [data-testid="stSidebar"] {
-        min-width: 280px;
-        max-width: 280px;
+        min-width: 285px;
+        max-width: 285px;
     }
 
 
@@ -89,6 +98,11 @@ st.markdown(
        ====================================================== */
 
     .stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .stLinkButton > a {
         border-radius: 8px;
         font-weight: 600;
     }
@@ -130,7 +144,7 @@ st.markdown(
 
 
     /* ======================================================
-       DATAFRAME
+       TABLAS
        ====================================================== */
 
     [data-testid="stDataFrame"] {
@@ -146,6 +160,15 @@ st.markdown(
         border-radius: 12px;
     }
 
+
+    /* ======================================================
+       TABS
+       ====================================================== */
+
+    button[data-baseweb="tab"] {
+        font-weight: 600;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -153,15 +176,15 @@ st.markdown(
 
 
 # ============================================================
-# ESTADO GENERAL DE LA APLICACIÓN
+# ESTADOS GENERALES
 # ============================================================
 
 if "ingreso" not in st.session_state:
-    st.session_state.ingreso = False
+    st.session_state["ingreso"] = False
 
 
 # ============================================================
-# PORTADA PRINCIPAL
+# PORTADA
 # ============================================================
 
 def mostrar_portada():
@@ -176,7 +199,7 @@ def mostrar_portada():
     with col2:
 
         # ====================================================
-        # LOGO INTILED
+        # LOGO
         # ====================================================
 
         try:
@@ -192,7 +215,7 @@ def mostrar_portada():
 
 
         # ====================================================
-        # TÍTULO
+        # NOMBRE DE LA PLATAFORMA
         # ====================================================
 
         st.markdown(
@@ -232,12 +255,39 @@ def mostrar_portada():
         if st.button(
             "⚡ Ingresar a la plataforma",
             use_container_width=True,
-            type="primary"
+            type="primary",
+            key="boton_ingreso_principal"
         ):
 
-            st.session_state.ingreso = True
+            st.session_state[
+                "ingreso"
+            ] = True
 
             st.rerun()
+
+
+        # ====================================================
+        # DESCRIPCIÓN
+        # ====================================================
+
+        st.markdown(
+            """
+            <p
+                style="
+                    text-align:center;
+                    margin-top:35px;
+                    color:#777777;
+                    font-size:14px;
+                    line-height:1.6;
+                "
+            >
+                Radar de oportunidades · Inteligencia de proyectos
+                <br>
+                Estructuración · Portafolio · Seguimiento
+            </p>
+            """,
+            unsafe_allow_html=True
+        )
 
 
         # ====================================================
@@ -249,13 +299,13 @@ def mostrar_portada():
             <p
                 style="
                     text-align:center;
-                    margin-top:50px;
-                    color:#888888;
-                    font-size:13px;
+                    margin-top:35px;
+                    color:#999999;
+                    font-size:12px;
                 "
             >
                 Plataforma interna de inteligencia
-                de proyectos
+                y gestión de proyectos
                 <br>
                 INTILED SAS BIC
             </p>
@@ -271,7 +321,7 @@ def mostrar_portada():
 def ejecutar_aplicacion():
 
     # ========================================================
-    # MENÚ LATERAL
+    # MENÚ
     # ========================================================
 
     opcion = mostrar_menu()
@@ -287,7 +337,7 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
-    # RADAR DE OPORTUNIDADES
+    # RADAR
     # ========================================================
 
     elif opcion == "🔎 Radar de oportunidades":
@@ -314,7 +364,7 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
-    # ANALIZADOR DE DOCUMENTOS
+    # ANALIZADOR DOCUMENTAL
     # ========================================================
 
     elif opcion == "📑 Analizador de documentos":
@@ -329,6 +379,15 @@ def ejecutar_aplicacion():
     elif opcion == "📊 Portafolio INTILED":
 
         mostrar_portafolio()
+
+
+    # ========================================================
+    # REUNIONES Y AVANCES
+    # ========================================================
+
+    elif opcion == "📅 Reuniones y avances":
+
+        mostrar_reuniones()
 
 
     # ========================================================
@@ -386,7 +445,7 @@ def ejecutar_aplicacion():
 
 
     # ========================================================
-    # OPCIÓN NO DISPONIBLE
+    # OPCIÓN NO RECONOCIDA
     # ========================================================
 
     else:
@@ -398,13 +457,17 @@ def ejecutar_aplicacion():
 
 
 # ============================================================
-# EJECUCIÓN
+# CONTROL PRINCIPAL
 # ============================================================
 
-if st.session_state.ingreso:
+if st.session_state[
+    "ingreso"
+]:
 
     ejecutar_aplicacion()
 
 else:
+
+    mostrar_portada()
 
     mostrar_portada()
