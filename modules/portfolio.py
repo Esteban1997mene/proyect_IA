@@ -30,14 +30,23 @@ from services.excel_importer import (
 
 
 # ============================================================
-# INICIALIZAR PORTAFOLIO
+# INICIALIZACIÓN
 # ============================================================
 
 def inicializar_portafolio():
+
     if "portfolio_projects" not in st.session_state:
         st.session_state["portfolio_projects"] = []
 
     return st.session_state["portfolio_projects"]
+
+
+def inicializar_papelera():
+
+    if "portfolio_trash" not in st.session_state:
+        st.session_state["portfolio_trash"] = []
+
+    return st.session_state["portfolio_trash"]
 
 
 # ============================================================
@@ -45,28 +54,35 @@ def inicializar_portafolio():
 # ============================================================
 
 def mostrar_encabezado():
+
     col1, col2 = st.columns([5, 1])
 
     with col1:
+
         st.title("📊 Portafolio INTILED")
+
         st.caption(
             "Centro ejecutivo de seguimiento de proyectos, "
             "iniciativas y oportunidades de INTILED SAS BIC."
         )
 
     with col2:
+
         usuario = st.session_state.get(
             "portfolio_user",
             "Usuario"
         )
 
-        st.caption(f"👤 {usuario}")
+        st.caption(
+            f"👤 {usuario}"
+        )
 
         if st.button(
             "🔒 Cerrar sesión",
             use_container_width=True,
             key="cerrar_sesion_portafolio"
         ):
+
             cerrar_sesion()
             st.rerun()
 
@@ -76,94 +92,129 @@ def mostrar_encabezado():
 # ============================================================
 
 def mostrar_metricas(proyectos):
-    metricas = calcular_metricas(proyectos)
 
-    st.subheader("📌 Resumen ejecutivo")
+    metricas = calcular_metricas(
+        proyectos
+    )
+
+    st.subheader(
+        "📌 Resumen ejecutivo"
+    )
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
+
         st.metric(
             "Proyectos",
             metricas.get("total", 0)
         )
 
     with col2:
+
         st.metric(
             "Valor estimado",
             formatear_moneda(
-                metricas.get("valor_total", 0)
+                metricas.get(
+                    "valor_total",
+                    0
+                )
             )
         )
 
     with col3:
+
         st.metric(
             "Pipeline ponderado",
             formatear_moneda(
-                metricas.get("valor_ponderado", 0)
+                metricas.get(
+                    "valor_ponderado",
+                    0
+                )
             )
         )
 
     with col4:
+
         st.metric(
             "Prioridad P1",
-            metricas.get("prioridad_1", 0)
+            metricas.get(
+                "prioridad_1",
+                0
+            )
         )
 
     with col5:
+
         st.metric(
             "Bloqueados",
-            metricas.get("bloqueados", 0)
+            metricas.get(
+                "bloqueados",
+                0
+            )
         )
 
 
 # ============================================================
-# RESUMEN POR ESTADOS
+# RESUMEN DE ESTADOS
 # ============================================================
 
 def mostrar_resumen_estados(proyectos):
+
     if not proyectos:
         return
 
     conteo = {}
 
     for proyecto in proyectos:
+
         estado = proyecto.get(
             "estado",
             "Sin estado"
         )
 
         conteo[estado] = (
-            conteo.get(estado, 0) + 1
+            conteo.get(
+                estado,
+                0
+            )
+            + 1
         )
 
-    st.markdown("### 🚦 Estado general")
+    st.markdown(
+        "### 🚦 Estado general"
+    )
 
-    estados_ordenados = sorted(
+    estados = sorted(
         conteo.items(),
         key=lambda x: x[1],
         reverse=True
     )
 
-    cantidad_columnas = min(
-        len(estados_ordenados),
+    cantidad = min(
+        len(estados),
         5
     )
 
-    if cantidad_columnas == 0:
+    if cantidad == 0:
         return
 
     columnas = st.columns(
-        cantidad_columnas
+        cantidad
     )
 
-    for indice, (estado, cantidad) in enumerate(
-        estados_ordenados[:5]
+    for indice, (
+        estado,
+        numero
+    ) in enumerate(
+        estados[:5]
     ):
+
         with columnas[indice]:
+
             st.metric(
                 estado,
-                cantidad
+                numero
             )
 
 
@@ -172,11 +223,15 @@ def mostrar_resumen_estados(proyectos):
 # ============================================================
 
 def aplicar_filtros(proyectos):
-    st.subheader("🔎 Buscar proyectos")
+
+    st.subheader(
+        "🔎 Buscar proyectos"
+    )
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
+
         busqueda = st.text_input(
             "Buscar",
             placeholder=(
@@ -186,6 +241,7 @@ def aplicar_filtros(proyectos):
         )
 
     with col2:
+
         estado = st.selectbox(
             "Estado",
             ["Todos"] + ESTADOS_PROYECTO,
@@ -193,6 +249,7 @@ def aplicar_filtros(proyectos):
         )
 
     with col3:
+
         prioridad = st.selectbox(
             "Prioridad",
             ["Todas"] + PRIORIDADES,
@@ -202,6 +259,7 @@ def aplicar_filtros(proyectos):
     resultado = proyectos
 
     if busqueda:
+
         texto = busqueda.lower().strip()
 
         resultado = [
@@ -219,6 +277,7 @@ def aplicar_filtros(proyectos):
         ]
 
     if estado != "Todos":
+
         resultado = [
             proyecto
             for proyecto in resultado
@@ -226,6 +285,7 @@ def aplicar_filtros(proyectos):
         ]
 
     if prioridad != "Todas":
+
         resultado = [
             proyecto
             for proyecto in resultado
@@ -236,41 +296,58 @@ def aplicar_filtros(proyectos):
 
 
 # ============================================================
-# TABLA DEL PORTAFOLIO
+# TABLA
 # ============================================================
 
 def mostrar_tabla(proyectos):
-    st.subheader("📋 Proyectos")
+
+    st.subheader(
+        "📋 Proyectos"
+    )
 
     if not proyectos:
+
         st.info(
             "No existen proyectos para mostrar."
         )
+
         return
 
     datos = []
 
     for proyecto in proyectos:
-        probabilidad = proyecto.get(
-            "probabilidad",
-            0
-        ) or 0
 
         datos.append({
+
             "Proyecto":
-                proyecto.get("nombre", ""),
+                proyecto.get(
+                    "nombre",
+                    ""
+                ),
 
             "Entidad":
-                proyecto.get("entidad", ""),
+                proyecto.get(
+                    "entidad",
+                    ""
+                ),
 
             "Estado":
-                proyecto.get("estado", ""),
+                proyecto.get(
+                    "estado",
+                    ""
+                ),
 
             "Prioridad":
-                proyecto.get("prioridad", ""),
+                proyecto.get(
+                    "prioridad",
+                    ""
+                ),
 
             "Responsable":
-                proyecto.get("responsable", ""),
+                proyecto.get(
+                    "responsable",
+                    ""
+                ),
 
             "Valor":
                 formatear_moneda(
@@ -281,7 +358,9 @@ def mostrar_tabla(proyectos):
                 ),
 
             "Probabilidad":
-                f"{probabilidad}%",
+                (
+                    f"{proyecto.get('probabilidad', 0) or 0}%"
+                ),
 
             "Próxima acción":
                 proyecto.get(
@@ -298,14 +377,419 @@ def mostrar_tabla(proyectos):
 
 
 # ============================================================
+# EDITAR PROYECTO
+# ============================================================
+
+def mostrar_edicion_proyecto(
+    proyecto
+):
+
+    st.markdown(
+        "### ✏️ Editar proyecto"
+    )
+
+    proyecto_id = str(
+        proyecto.get(
+            "id",
+            "sin_id"
+        )
+    )
+
+    with st.form(
+        f"editar_proyecto_{proyecto_id}"
+    ):
+
+        nombre = st.text_input(
+            "Nombre del proyecto",
+            value=proyecto.get(
+                "nombre",
+                ""
+            )
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            entidad = st.text_input(
+                "Entidad / cliente",
+                value=proyecto.get(
+                    "entidad",
+                    ""
+                )
+            )
+
+            municipio = st.text_input(
+                "Municipio",
+                value=proyecto.get(
+                    "municipio",
+                    ""
+                )
+            )
+
+            tipo_actual = proyecto.get(
+                "tipo",
+                TIPOS_PROYECTO[0]
+            )
+
+            indice_tipo = (
+                TIPOS_PROYECTO.index(
+                    tipo_actual
+                )
+                if tipo_actual in TIPOS_PROYECTO
+                else 0
+            )
+
+            tipo = st.selectbox(
+                "Tipo de proyecto",
+                TIPOS_PROYECTO,
+                index=indice_tipo
+            )
+
+            valor = st.number_input(
+                "Valor estimado COP",
+                min_value=0.0,
+                value=float(
+                    proyecto.get(
+                        "valor_estimado",
+                        0
+                    )
+                    or 0
+                ),
+                step=1000000.0,
+                format="%.0f"
+            )
+
+        with col2:
+
+            responsable = st.text_input(
+                "Responsable",
+                value=proyecto.get(
+                    "responsable",
+                    ""
+                )
+            )
+
+            estado_actual = proyecto.get(
+                "estado",
+                ESTADOS_PROYECTO[0]
+            )
+
+            indice_estado = (
+                ESTADOS_PROYECTO.index(
+                    estado_actual
+                )
+                if estado_actual in ESTADOS_PROYECTO
+                else 0
+            )
+
+            estado = st.selectbox(
+                "Estado",
+                ESTADOS_PROYECTO,
+                index=indice_estado
+            )
+
+            prioridad_actual = proyecto.get(
+                "prioridad",
+                PRIORIDADES[0]
+            )
+
+            indice_prioridad = (
+                PRIORIDADES.index(
+                    prioridad_actual
+                )
+                if prioridad_actual in PRIORIDADES
+                else 0
+            )
+
+            prioridad = st.selectbox(
+                "Prioridad",
+                PRIORIDADES,
+                index=indice_prioridad
+            )
+
+            probabilidad = st.slider(
+                "Probabilidad comercial",
+                0,
+                100,
+                int(
+                    proyecto.get(
+                        "probabilidad",
+                        0
+                    )
+                    or 0
+                ),
+                5
+            )
+
+        situacion = st.text_area(
+            "Situación actual",
+            value=proyecto.get(
+                "situacion_actual",
+                ""
+            ),
+            height=120
+        )
+
+        proxima_accion = st.text_area(
+            "Próxima acción",
+            value=proyecto.get(
+                "proxima_accion",
+                ""
+            ),
+            height=120
+        )
+
+        guardar = st.form_submit_button(
+            "💾 Guardar cambios",
+            type="primary",
+            use_container_width=True
+        )
+
+        if guardar:
+
+            if not nombre.strip():
+
+                st.error(
+                    "El proyecto debe tener un nombre."
+                )
+
+                return
+
+            campos = {
+
+                "nombre":
+                    nombre.strip(),
+
+                "entidad":
+                    entidad.strip(),
+
+                "municipio":
+                    municipio.strip(),
+
+                "tipo":
+                    tipo,
+
+                "valor_estimado":
+                    valor,
+
+                "responsable":
+                    responsable.strip(),
+
+                "estado":
+                    estado,
+
+                "prioridad":
+                    prioridad,
+
+                "probabilidad":
+                    probabilidad,
+
+                "situacion_actual":
+                    situacion.strip(),
+
+                "proxima_accion":
+                    proxima_accion.strip()
+            }
+
+            cambios = []
+
+            for campo, nuevo in campos.items():
+
+                anterior = proyecto.get(
+                    campo
+                )
+
+                if anterior != nuevo:
+
+                    cambios.append(
+                        f"{campo}: "
+                        f"{anterior} → {nuevo}"
+                    )
+
+                    proyecto[
+                        campo
+                    ] = nuevo
+
+            if cambios:
+
+                proyecto[
+                    "ultima_actualizacion"
+                ] = datetime.now().isoformat()
+
+                registrar_cambio(
+                    proyecto,
+                    (
+                        "Proyecto actualizado. "
+                        + " | ".join(
+                            cambios
+                        )
+                    ),
+                    responsable.strip()
+                )
+
+                st.success(
+                    "Proyecto actualizado correctamente."
+                )
+
+                st.rerun()
+
+            else:
+
+                st.info(
+                    "No se detectaron cambios."
+                )
+
+
+# ============================================================
+# ENVIAR A PAPELERA
+# ============================================================
+
+def enviar_a_papelera(
+    proyecto,
+    proyectos
+):
+
+    papelera = inicializar_papelera()
+
+    eliminado = dict(
+        proyecto
+    )
+
+    eliminado[
+        "fecha_eliminacion"
+    ] = datetime.now().isoformat()
+
+    eliminado[
+        "eliminado_por"
+    ] = st.session_state.get(
+        "portfolio_user",
+        ""
+    )
+
+    registrar_cambio(
+        eliminado,
+        "Proyecto enviado a la papelera.",
+        st.session_state.get(
+            "portfolio_user",
+            ""
+        )
+    )
+
+    papelera.append(
+        eliminado
+    )
+
+    if proyecto in proyectos:
+
+        proyectos.remove(
+            proyecto
+        )
+
+
+# ============================================================
+# GESTIÓN DEL PROYECTO
+# ============================================================
+
+def mostrar_gestion_proyecto(
+    proyecto,
+    proyectos
+):
+
+    st.divider()
+
+    st.markdown(
+        "### ⚙️ Gestión del proyecto"
+    )
+
+    st.caption(
+        "Puedes modificar la información o enviar "
+        "el proyecto a la papelera."
+    )
+
+    tab_editar, tab_eliminar = st.tabs(
+        [
+            "✏️ Editar proyecto",
+            "🗑️ Eliminar proyecto"
+        ]
+    )
+
+    with tab_editar:
+
+        mostrar_edicion_proyecto(
+            proyecto
+        )
+
+    with tab_eliminar:
+
+        st.warning(
+            "El proyecto será enviado primero a la "
+            "papelera. Podrás restaurarlo posteriormente."
+        )
+
+        st.write(
+            "**Proyecto seleccionado:**"
+        )
+
+        st.write(
+            proyecto.get(
+                "nombre",
+                ""
+            )
+        )
+
+        proyecto_id = str(
+            proyecto.get(
+                "id",
+                ""
+            )
+        )
+
+        confirmar = st.checkbox(
+            "Confirmo que deseo enviar este "
+            "proyecto a la papelera.",
+            key=(
+                "confirmar_papelera_"
+                + proyecto_id
+            )
+        )
+
+        if st.button(
+            "🗑️ Enviar a papelera",
+            type="primary",
+            use_container_width=True,
+            disabled=not confirmar,
+            key=(
+                "enviar_papelera_"
+                + proyecto_id
+            )
+        ):
+
+            enviar_a_papelera(
+                proyecto,
+                proyectos
+            )
+
+            st.success(
+                "Proyecto enviado a la papelera."
+            )
+
+            st.rerun()
+
+
+# ============================================================
 # FICHA EJECUTIVA
 # ============================================================
 
-def mostrar_detalle_proyecto(proyectos):
+def mostrar_detalle_proyecto(
+    proyectos
+):
+
     if not proyectos:
         return
 
     st.divider()
+
     st.subheader(
         "🔎 Ficha ejecutiva del proyecto"
     )
@@ -315,34 +799,35 @@ def mostrar_detalle_proyecto(proyectos):
     for indice, proyecto in enumerate(
         proyectos
     ):
-        nombre = proyecto.get(
-            "nombre",
-            "Proyecto"
-        )
-
-        entidad = proyecto.get(
-            "entidad",
-            "Sin entidad"
-        )
 
         etiqueta = (
-            f"{nombre} | {entidad} "
+            f"{proyecto.get('nombre', 'Proyecto')} | "
+            f"{proyecto.get('entidad', 'Sin entidad')} "
             f"[{indice + 1}]"
         )
 
-        opciones[etiqueta] = indice
+        opciones[
+            etiqueta
+        ] = indice
 
     seleccion = st.selectbox(
         "Seleccionar proyecto",
-        list(opciones.keys()),
+        list(
+            opciones.keys()
+        ),
         key="portfolio_detalle_proyecto"
     )
 
     proyecto = proyectos[
-        opciones[seleccion]
+        opciones[
+            seleccion
+        ]
     ]
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
+
         st.markdown(
             f"## {proyecto.get('nombre', '')}"
         )
@@ -352,7 +837,11 @@ def mostrar_detalle_proyecto(proyectos):
         )
 
         with col1:
-            st.write("**Estado**")
+
+            st.write(
+                "**Estado**"
+            )
+
             st.write(
                 proyecto.get(
                     "estado",
@@ -361,7 +850,11 @@ def mostrar_detalle_proyecto(proyectos):
             )
 
         with col2:
-            st.write("**Prioridad**")
+
+            st.write(
+                "**Prioridad**"
+            )
+
             st.write(
                 proyecto.get(
                     "prioridad",
@@ -370,7 +863,11 @@ def mostrar_detalle_proyecto(proyectos):
             )
 
         with col3:
-            st.write("**Valor estimado**")
+
+            st.write(
+                "**Valor estimado**"
+            )
+
             st.write(
                 formatear_moneda(
                     proyecto.get(
@@ -381,7 +878,11 @@ def mostrar_detalle_proyecto(proyectos):
             )
 
         with col4:
-            st.write("**Responsable**")
+
+            st.write(
+                "**Responsable**"
+            )
+
             st.write(
                 proyecto.get(
                     "responsable",
@@ -395,7 +896,11 @@ def mostrar_detalle_proyecto(proyectos):
         col5, col6 = st.columns(2)
 
         with col5:
-            st.write("**Entidad / Cliente**")
+
+            st.write(
+                "**Entidad / Cliente**"
+            )
+
             st.write(
                 proyecto.get(
                     "entidad",
@@ -404,7 +909,10 @@ def mostrar_detalle_proyecto(proyectos):
                 or "No informado"
             )
 
-            st.write("**Tipo de proyecto**")
+            st.write(
+                "**Tipo de proyecto**"
+            )
+
             st.write(
                 proyecto.get(
                     "tipo",
@@ -414,7 +922,11 @@ def mostrar_detalle_proyecto(proyectos):
             )
 
         with col6:
-            st.write("**Municipio**")
+
+            st.write(
+                "**Municipio**"
+            )
+
             st.write(
                 proyecto.get(
                     "municipio",
@@ -426,6 +938,7 @@ def mostrar_detalle_proyecto(proyectos):
             st.write(
                 "**Probabilidad comercial**"
             )
+
             st.write(
                 f"{proyecto.get('probabilidad', 0) or 0}%"
             )
@@ -461,19 +974,28 @@ def mostrar_detalle_proyecto(proyectos):
         )
 
         if fecha_accion:
+
             st.caption(
-                f"📅 Fecha prevista: {fecha_accion}"
+                f"📅 Fecha prevista: "
+                f"{fecha_accion}"
             )
 
         # ====================================================
-        # FECHAS DEL PROYECTO
+        # FECHAS CONTRACTUALES
         # ====================================================
 
         if (
-            proyecto.get("fecha_inicio_contrato")
-            or proyecto.get("desembolso_anticipo")
-            or proyecto.get("fecha_finalizacion")
+            proyecto.get(
+                "fecha_inicio_contrato"
+            )
+            or proyecto.get(
+                "desembolso_anticipo"
+            )
+            or proyecto.get(
+                "fecha_finalizacion"
+            )
         ):
+
             st.divider()
 
             st.markdown(
@@ -483,7 +1005,11 @@ def mostrar_detalle_proyecto(proyectos):
             c1, c2, c3 = st.columns(3)
 
             with c1:
-                st.write("**Inicio**")
+
+                st.write(
+                    "**Inicio**"
+                )
+
                 st.write(
                     proyecto.get(
                         "fecha_inicio_contrato"
@@ -492,9 +1018,11 @@ def mostrar_detalle_proyecto(proyectos):
                 )
 
             with c2:
+
                 st.write(
                     "**Desembolso / anticipo**"
                 )
+
                 st.write(
                     proyecto.get(
                         "desembolso_anticipo"
@@ -503,7 +1031,11 @@ def mostrar_detalle_proyecto(proyectos):
                 )
 
             with c3:
-                st.write("**Finalización**")
+
+                st.write(
+                    "**Finalización**"
+                )
+
                 st.write(
                     proyecto.get(
                         "fecha_finalizacion"
@@ -527,15 +1059,18 @@ def mostrar_detalle_proyecto(proyectos):
         )
 
         if not historial:
+
             st.info(
                 "Este proyecto todavía no tiene "
                 "movimientos históricos."
             )
 
         else:
+
             for evento in reversed(
                 historial
             ):
+
                 fecha = evento.get(
                     "fecha",
                     "Sin fecha"
@@ -545,12 +1080,14 @@ def mostrar_detalle_proyecto(proyectos):
                     f"📅 {fecha}",
                     expanded=False
                 ):
+
                     fuente = evento.get(
                         "fuente",
                         ""
                     )
 
                     if fuente:
+
                         st.caption(
                             f"Fuente: {fuente}"
                         )
@@ -561,11 +1098,16 @@ def mostrar_detalle_proyecto(proyectos):
                     )
 
                     if descripcion:
+
                         st.write(
                             descripcion
                         )
 
-                    if "valor_estimado" in evento:
+                    if (
+                        "valor_estimado"
+                        in evento
+                    ):
+
                         st.write(
                             "**Valor registrado:** "
                             + formatear_moneda(
@@ -576,7 +1118,10 @@ def mostrar_detalle_proyecto(proyectos):
                             )
                         )
 
-                    if evento.get("estado"):
+                    if evento.get(
+                        "estado"
+                    ):
+
                         st.write(
                             "**Estado:** "
                             f"{evento.get('estado')}"
@@ -588,11 +1133,13 @@ def mostrar_detalle_proyecto(proyectos):
                     )
 
                     if cambios:
+
                         st.markdown(
                             "**Cambios detectados:**"
                         )
 
                         for cambio in cambios:
+
                             anterior = cambio.get(
                                 "anterior"
                             )
@@ -602,9 +1149,12 @@ def mostrar_detalle_proyecto(proyectos):
                             )
 
                             if (
-                                cambio.get("campo")
+                                cambio.get(
+                                    "campo"
+                                )
                                 == "valor_estimado"
                             ):
+
                                 anterior = (
                                     formatear_moneda(
                                         anterior or 0
@@ -622,12 +1172,26 @@ def mostrar_detalle_proyecto(proyectos):
                                 f"{anterior} → {actual}"
                             )
 
+        # ====================================================
+        # EDITAR / ELIMINAR
+        # ====================================================
+
+        mostrar_gestion_proyecto(
+            proyecto,
+            st.session_state[
+                "portfolio_projects"
+            ]
+        )
+
 
 # ============================================================
 # ATENCIÓN GERENCIAL
 # ============================================================
 
-def mostrar_criticos(proyectos):
+def mostrar_criticos(
+    proyectos
+):
+
     st.subheader(
         "🚨 Atención gerencial"
     )
@@ -637,53 +1201,44 @@ def mostrar_criticos(proyectos):
     )
 
     if not criticos:
+
         st.success(
-            "No existen proyectos críticos "
-            "registrados."
+            "No existen proyectos críticos registrados."
         )
+
         return
 
-    st.caption(
-        "Proyectos P1 y proyectos actualmente "
-        "identificados como bloqueados."
-    )
-
     for proyecto in criticos:
-        with st.container(border=True):
+
+        with st.container(
+            border=True
+        ):
+
             st.markdown(
                 f"### {proyecto.get('nombre', '')}"
             )
 
-            col1, col2, col3 = (
-                st.columns(3)
-            )
+            col1, col2, col3 = st.columns(3)
 
             with col1:
-                st.write("**Estado**")
+
                 st.write(
-                    proyecto.get(
-                        "estado",
-                        ""
-                    )
+                    f"**Estado:** "
+                    f"{proyecto.get('estado', '')}"
                 )
 
             with col2:
-                st.write("**Prioridad**")
+
                 st.write(
-                    proyecto.get(
-                        "prioridad",
-                        ""
-                    )
+                    f"**Prioridad:** "
+                    f"{proyecto.get('prioridad', '')}"
                 )
 
             with col3:
-                st.write("**Responsable**")
+
                 st.write(
-                    proyecto.get(
-                        "responsable",
-                        ""
-                    )
-                    or "Sin asignar"
+                    f"**Responsable:** "
+                    f"{proyecto.get('responsable', '') or 'Sin asignar'}"
                 )
 
             st.write(
@@ -715,7 +1270,10 @@ def mostrar_criticos(proyectos):
 # ACCIONES
 # ============================================================
 
-def mostrar_acciones(proyectos):
+def mostrar_acciones(
+    proyectos
+):
+
     st.subheader(
         "⚡ Próximas acciones"
     )
@@ -725,13 +1283,19 @@ def mostrar_acciones(proyectos):
     )
 
     if not acciones:
+
         st.info(
             "No existen acciones pendientes."
         )
+
         return
 
     for accion in acciones:
-        with st.container(border=True):
+
+        with st.container(
+            border=True
+        ):
+
             st.markdown(
                 f"### {accion.get('proyecto', '')}"
             )
@@ -743,23 +1307,24 @@ def mostrar_acciones(proyectos):
                 )
             )
 
-            col1, col2, col3 = (
-                st.columns(3)
-            )
+            col1, col2, col3 = st.columns(3)
 
             with col1:
+
                 st.caption(
                     "👤 Responsable: "
                     f"{accion.get('responsable') or 'Sin asignar'}"
                 )
 
             with col2:
+
                 st.caption(
                     "🚦 Prioridad: "
                     f"{accion.get('prioridad') or 'Sin definir'}"
                 )
 
             with col3:
+
                 st.caption(
                     "📅 Fecha: "
                     f"{accion.get('fecha') or 'Sin definir'}"
@@ -770,19 +1335,18 @@ def mostrar_acciones(proyectos):
 # NUEVO PROYECTO
 # ============================================================
 
-def mostrar_nuevo_proyecto(proyectos):
+def mostrar_nuevo_proyecto(
+    proyectos
+):
+
     st.subheader(
         "➕ Registrar nueva iniciativa / proyecto"
-    )
-
-    st.caption(
-        "Utiliza este formulario para agregar "
-        "proyectos nuevos al portafolio."
     )
 
     with st.form(
         "form_nuevo_proyecto"
     ):
+
         nombre = st.text_input(
             "Nombre del proyecto *"
         )
@@ -790,6 +1354,7 @@ def mostrar_nuevo_proyecto(proyectos):
         col1, col2 = st.columns(2)
 
         with col1:
+
             entidad = st.text_input(
                 "Entidad / cliente"
             )
@@ -811,6 +1376,7 @@ def mostrar_nuevo_proyecto(proyectos):
             )
 
         with col2:
+
             responsable = st.text_input(
                 "Responsable"
             )
@@ -827,20 +1393,18 @@ def mostrar_nuevo_proyecto(proyectos):
 
             probabilidad = st.slider(
                 "Probabilidad comercial",
-                min_value=0,
-                max_value=100,
-                value=20,
-                step=5
+                0,
+                100,
+                20,
+                5
             )
 
         situacion = st.text_area(
-            "Situación actual",
-            height=100
+            "Situación actual"
         )
 
         proxima_accion = st.text_area(
-            "Próxima acción",
-            height=100
+            "Próxima acción"
         )
 
         guardar = st.form_submit_button(
@@ -850,23 +1414,24 @@ def mostrar_nuevo_proyecto(proyectos):
         )
 
         if guardar:
+
             if not nombre.strip():
+
                 st.error(
-                    "Debes ingresar el nombre "
-                    "del proyecto."
+                    "Debes ingresar el nombre del proyecto."
                 )
 
             else:
-                id_proyecto = (
-                    "PRJ-"
-                    + datetime.now().strftime(
-                        "%Y%m%d%H%M%S%f"
-                    )
-                )
 
                 proyecto = {
+
                     "id":
-                        id_proyecto,
+                        (
+                            "PRJ-"
+                            + datetime.now().strftime(
+                                "%Y%m%d%H%M%S%f"
+                            )
+                        ),
 
                     "nombre":
                         nombre.strip(),
@@ -919,11 +1484,7 @@ def mostrar_nuevo_proyecto(proyectos):
 
                 registrar_cambio(
                     proyecto,
-                    (
-                        "Proyecto registrado "
-                        "manualmente en "
-                        "Portafolio INTILED."
-                    ),
+                    "Proyecto registrado manualmente.",
                     responsable.strip()
                 )
 
@@ -939,25 +1500,21 @@ def mostrar_nuevo_proyecto(proyectos):
 
 
 # ============================================================
-# IMPORTAR EXCEL
+# IMPORTADOR EXCEL
 # ============================================================
 
-def mostrar_importador_excel(proyectos):
+def mostrar_importador_excel(
+    proyectos
+):
+
     st.subheader(
         "📥 Importar portafolio histórico"
     )
 
     st.write(
-        "Carga el archivo Excel de seguimiento de "
-        "proyectos de INTILED. INTI analizará las "
-        "hojas, identificará los proyectos actuales "
-        "y reconstruirá el historial disponible."
-    )
-
-    st.warning(
-        "La importación no se realizará inmediatamente. "
-        "Primero podrás revisar una vista previa y luego "
-        "confirmar la carga."
+        "Carga el archivo Excel de seguimiento. "
+        "INTI analizará las hojas y reconstruirá "
+        "el historial disponible."
     )
 
     archivo = st.file_uploader(
@@ -967,45 +1524,26 @@ def mostrar_importador_excel(proyectos):
     )
 
     if archivo is not None:
+
         st.success(
-            f"📎 Archivo seleccionado: {archivo.name}"
+            f"📎 {archivo.name}"
         )
 
-        col1, col2 = st.columns(
-            [2, 1]
-        )
+        if st.button(
+            "🔍 Analizar archivo",
+            type="primary",
+            use_container_width=True,
+            key="analizar_excel_portafolio"
+        ):
 
-        with col1:
-            analizar = st.button(
-                "🔍 Analizar archivo",
-                type="primary",
-                use_container_width=True,
-                key="analizar_excel_portafolio"
-            )
-
-        with col2:
-            limpiar = st.button(
-                "🗑️ Limpiar análisis",
-                use_container_width=True,
-                key="limpiar_importacion_portafolio"
-            )
-
-        if limpiar:
-            st.session_state.pop(
-                "portfolio_import_preview",
-                None
-            )
-            st.rerun()
-
-        if analizar:
             try:
+
                 with st.spinner(
-                    "INTI está analizando el archivo..."
+                    "Analizando portafolio..."
                 ):
-                    resultado = (
-                        procesar_excel_proyectos(
-                            archivo.getvalue()
-                        )
+
+                    resultado = procesar_excel_proyectos(
+                        archivo.getvalue()
                     )
 
                 st.session_state[
@@ -1019,16 +1557,14 @@ def mostrar_importador_excel(proyectos):
                 st.rerun()
 
             except Exception as error:
+
                 st.error(
-                    "No fue posible analizar "
-                    "el archivo Excel."
+                    "No fue posible analizar el archivo."
                 )
 
-                st.exception(error)
-
-    # ========================================================
-    # VISTA PREVIA
-    # ========================================================
+                st.exception(
+                    error
+                )
 
     resultado = st.session_state.get(
         "portfolio_import_preview"
@@ -1048,11 +1584,6 @@ def mostrar_importador_excel(proyectos):
         []
     )
 
-    hojas = resultado.get(
-        "hojas",
-        []
-    )
-
     valor_total = sum(
         float(
             proyecto.get(
@@ -1064,27 +1595,29 @@ def mostrar_importador_excel(proyectos):
         for proyecto in proyectos_importados
     )
 
-    col1, col2, col3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
 
-    with col1:
+    with c1:
+
         st.metric(
-            "Hojas detectadas",
+            "Hojas",
             resultado.get(
                 "total_hojas",
-                len(hojas)
+                0
             )
         )
 
-    with col2:
+    with c2:
+
         st.metric(
-            "Proyectos detectados",
-            resultado.get(
-                "total_proyectos",
-                len(proyectos_importados)
+            "Proyectos",
+            len(
+                proyectos_importados
             )
         )
 
-    with col3:
+    with c3:
+
         st.metric(
             "Valor identificado",
             formatear_moneda(
@@ -1092,43 +1625,12 @@ def mostrar_importador_excel(proyectos):
             )
         )
 
-    # ========================================================
-    # HOJAS
-    # ========================================================
-
-    with st.expander(
-        "📚 Hojas históricas detectadas"
-    ):
-        if not hojas:
-            st.info(
-                "No se detectaron hojas."
-            )
-
-        for hoja in hojas:
-            st.write(
-                f"📄 **{hoja.get('nombre', '')}** "
-                f"— "
-                f"{len(hoja.get('proyectos', []))} "
-                f"registros"
-            )
-
-    # ========================================================
-    # TABLA PREVIA
-    # ========================================================
-
-    st.markdown(
-        "### 📋 Proyectos que serán cargados"
-    )
-
     datos = []
 
     for proyecto in proyectos_importados:
-        historial = proyecto.get(
-            "historial",
-            []
-        )
 
         datos.append({
+
             "Proyecto":
                 proyecto.get(
                     "nombre",
@@ -1168,43 +1670,22 @@ def mostrar_importador_excel(proyectos):
                 ),
 
             "Histórico":
-                len(historial)
+                len(
+                    proyecto.get(
+                        "historial",
+                        []
+                    )
+                )
         })
 
-    if datos:
-        st.dataframe(
-            datos,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-        st.warning(
-            "No se detectaron proyectos "
-            "para importar."
-        )
-        return
-
-    # ========================================================
-    # SEGURIDAD DE IMPORTACIÓN
-    # ========================================================
-
-    st.info(
-        "Los proyectos con nombres distintos no se "
-        "fusionan automáticamente. Esto evita que INTI "
-        "combine proyectos diferentes sin autorización."
+    st.dataframe(
+        datos,
+        use_container_width=True,
+        hide_index=True
     )
 
-    if proyectos:
-        st.warning(
-            f"Actualmente existen {len(proyectos)} "
-            "proyectos en el portafolio. Si confirmas "
-            "esta importación, serán reemplazados por "
-            "los registros del Excel."
-        )
-
-    st.markdown(
-        "### ✅ Confirmar carga"
+    st.warning(
+        "Revisa la información antes de confirmar."
     )
 
     confirmar = st.checkbox(
@@ -1220,6 +1701,7 @@ def mostrar_importador_excel(proyectos):
         disabled=not confirmar,
         key="confirmar_importacion_portafolio"
     ):
+
         st.session_state[
             "portfolio_projects"
         ] = proyectos_importados
@@ -1238,52 +1720,225 @@ def mostrar_importador_excel(proyectos):
         )
 
         st.success(
-            "✅ Los proyectos fueron cargados "
-            "correctamente al Portafolio INTILED."
+            "Portafolio cargado correctamente."
         )
 
         st.rerun()
 
 
 # ============================================================
-# ESTADO DE IMPORTACIÓN
+# PAPELERA
 # ============================================================
 
-def mostrar_estado_importacion():
-    if not st.session_state.get(
-        "portfolio_excel_imported",
-        False
-    ):
-        return
+def mostrar_papelera():
 
-    fecha = st.session_state.get(
-        "portfolio_import_date"
+    papelera = inicializar_papelera()
+
+    st.subheader(
+        "🗑️ Papelera de proyectos"
     )
 
-    if fecha:
-        try:
-            fecha_obj = datetime.fromisoformat(
-                fecha
-            )
+    st.caption(
+        "Los proyectos eliminados pueden restaurarse "
+        "mientras permanezcan en la papelera."
+    )
 
-            fecha_texto = (
-                fecha_obj.strftime(
-                    "%d/%m/%Y %H:%M"
-                )
-            )
+    if not papelera:
 
-        except Exception:
-            fecha_texto = str(fecha)
-
-    else:
-        fecha_texto = (
-            "Fecha no disponible"
+        st.success(
+            "La papelera está vacía."
         )
 
-    st.success(
-        "📥 Portafolio histórico cargado "
-        f"correctamente — {fecha_texto}"
+        return
+
+    st.metric(
+        "Proyectos en papelera",
+        len(
+            papelera
+        )
     )
+
+    for indice, proyecto in enumerate(
+        list(
+            papelera
+        )
+    ):
+
+        identificador = (
+            str(
+                proyecto.get(
+                    "id",
+                    "proyecto"
+                )
+            )
+            + "_"
+            + str(
+                indice
+            )
+        )
+
+        with st.container(
+            border=True
+        ):
+
+            st.markdown(
+                f"### {proyecto.get('nombre', '')}"
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+
+                st.write(
+                    "**Entidad**"
+                )
+
+                st.write(
+                    proyecto.get(
+                        "entidad",
+                        ""
+                    )
+                    or "No informado"
+                )
+
+            with col2:
+
+                st.write(
+                    "**Valor**"
+                )
+
+                st.write(
+                    formatear_moneda(
+                        proyecto.get(
+                            "valor_estimado",
+                            0
+                        )
+                    )
+                )
+
+            with col3:
+
+                st.write(
+                    "**Responsable**"
+                )
+
+                st.write(
+                    proyecto.get(
+                        "responsable",
+                        ""
+                    )
+                    or "Sin asignar"
+                )
+
+            fecha_eliminacion = proyecto.get(
+                "fecha_eliminacion"
+            )
+
+            if fecha_eliminacion:
+
+                try:
+
+                    fecha_obj = datetime.fromisoformat(
+                        fecha_eliminacion
+                    )
+
+                    fecha_eliminacion = (
+                        fecha_obj.strftime(
+                            "%d/%m/%Y %H:%M"
+                        )
+                    )
+
+                except Exception:
+                    pass
+
+            st.caption(
+                f"Eliminado: "
+                f"{fecha_eliminacion or 'Sin fecha'}"
+            )
+
+            col_restaurar, col_eliminar = (
+                st.columns(2)
+            )
+
+            with col_restaurar:
+
+                if st.button(
+                    "♻️ Restaurar",
+                    use_container_width=True,
+                    key=(
+                        "restaurar_"
+                        + identificador
+                    )
+                ):
+
+                    restaurado = dict(
+                        proyecto
+                    )
+
+                    restaurado.pop(
+                        "fecha_eliminacion",
+                        None
+                    )
+
+                    restaurado.pop(
+                        "eliminado_por",
+                        None
+                    )
+
+                    registrar_cambio(
+                        restaurado,
+                        "Proyecto restaurado desde la papelera.",
+                        st.session_state.get(
+                            "portfolio_user",
+                            ""
+                        )
+                    )
+
+                    st.session_state[
+                        "portfolio_projects"
+                    ].append(
+                        restaurado
+                    )
+
+                    papelera.remove(
+                        proyecto
+                    )
+
+                    st.success(
+                        "Proyecto restaurado."
+                    )
+
+                    st.rerun()
+
+            with col_eliminar:
+
+                confirmar = st.checkbox(
+                    "Confirmar borrado",
+                    key=(
+                        "confirmar_definitivo_"
+                        + identificador
+                    )
+                )
+
+                if st.button(
+                    "❌ Eliminar definitivamente",
+                    use_container_width=True,
+                    disabled=not confirmar,
+                    key=(
+                        "eliminar_definitivo_"
+                        + identificador
+                    )
+                ):
+
+                    papelera.remove(
+                        proyecto
+                    )
+
+                    st.success(
+                        "Proyecto eliminado definitivamente."
+                    )
+
+                    st.rerun()
 
 
 # ============================================================
@@ -1292,33 +1947,16 @@ def mostrar_estado_importacion():
 
 def mostrar_portafolio():
 
-    # ========================================================
-    # SEGURIDAD
-    # ========================================================
-
     if not esta_autenticado():
+
         mostrar_login()
         return
 
-    # ========================================================
-    # DATOS
-    # ========================================================
-
     proyectos = inicializar_portafolio()
-
-    # ========================================================
-    # ENCABEZADO
-    # ========================================================
 
     mostrar_encabezado()
 
-    mostrar_estado_importacion()
-
     st.divider()
-
-    # ========================================================
-    # RESUMEN
-    # ========================================================
 
     mostrar_metricas(
         proyectos
@@ -1330,25 +1968,19 @@ def mostrar_portafolio():
 
     st.divider()
 
-    # ========================================================
-    # PESTAÑAS
-    # ========================================================
-
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "📊 Portafolio",
             "🚨 Atención",
             "⚡ Acciones",
             "➕ Nuevo proyecto",
-            "📥 Importar Excel"
+            "📥 Importar Excel",
+            "🗑️ Papelera"
         ]
     )
 
-    # ========================================================
-    # PORTAFOLIO
-    # ========================================================
-
     with tab1:
+
         filtrados = aplicar_filtros(
             proyectos
         )
@@ -1361,38 +1993,30 @@ def mostrar_portafolio():
             filtrados
         )
 
-    # ========================================================
-    # ATENCIÓN
-    # ========================================================
-
     with tab2:
+
         mostrar_criticos(
             proyectos
         )
 
-    # ========================================================
-    # ACCIONES
-    # ========================================================
-
     with tab3:
+
         mostrar_acciones(
             proyectos
         )
 
-    # ========================================================
-    # NUEVO PROYECTO
-    # ========================================================
-
     with tab4:
+
         mostrar_nuevo_proyecto(
             proyectos
         )
 
-    # ========================================================
-    # IMPORTAR EXCEL
-    # ========================================================
-
     with tab5:
+
         mostrar_importador_excel(
             proyectos
         )
+
+    with tab6:
+
+        mostrar_papelera()
