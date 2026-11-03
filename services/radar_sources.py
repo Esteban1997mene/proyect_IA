@@ -1,5 +1,10 @@
 
-# services/radar_sources.py
+# ============================================================
+# INTI PROJECTS ENTERPRISE
+# INTILED SAS BIC
+# Archivo: services/radar_sources.py
+# Radar de oportunidades: Colombia y Ecuador
+# ============================================================
 
 import io
 import re
@@ -9,6 +14,10 @@ from datetime import date, timedelta
 import pandas as pd
 import requests
 
+
+# ============================================================
+# FUENTES OFICIALES
+# ============================================================
 
 SECOP_URL = (
     "https://www.datos.gov.co/resource/"
@@ -29,6 +38,11 @@ SERCOP_URL = (
     "https://datosabiertos.compraspublicas.gob.ec/"
     "PLATAFORMA/busqueda"
 )
+
+
+# ============================================================
+# CATEGORÍAS DE PROYECTOS INTILED
+# ============================================================
 
 CATEGORIAS = {
     "Alumbrado público": [
@@ -68,226 +82,403 @@ CATEGORIAS = {
     ],
 }
 
-# Términos usados para consultar la fuente.
-# Son deliberadamente pocos para limitar las solicitudes.
+
+# Palabras utilizadas para consultar las fuentes.
+
 CONSULTAS = {
     "Alumbrado público": [
-        "alumbrado", "luminarias", "iluminacion"
+        "alumbrado",
+        "luminarias",
+        "iluminacion",
     ],
     "Energía solar": [
-        "fotovoltaico", "solar"
+        "fotovoltaico",
+        "solar",
     ],
     "Eficiencia energética": [
-        "eficiencia energetica", "energetica"
+        "eficiencia energetica",
+        "energetica",
     ],
     "Ingeniería eléctrica": [
-        "subestacion", "electrica"
+        "subestacion",
+        "electrica",
     ],
     "Consultoría e interventoría": [
-        "interventoria", "consultoria"
+        "interventoria",
+        "consultoria",
     ],
     "Tecnología y monitoreo": [
-        "telemetria", "automatizacion"
+        "telemetria",
+        "automatizacion",
     ],
 }
 
+
+# ============================================================
+# PROVINCIAS DE ECUADOR
+# ============================================================
+
 PROVINCIAS_ECUADOR = [
-    "Azuay", "Bolívar", "Cañar", "Carchi",
-    "Chimborazo", "Cotopaxi", "El Oro",
-    "Esmeraldas", "Galápagos", "Guayas",
-    "Imbabura", "Loja", "Los Ríos",
-    "Manabí", "Morona Santiago", "Napo",
-    "Orellana", "Pastaza", "Pichincha",
-    "Santa Elena", "Santo Domingo de los Tsáchilas",
-    "Sucumbíos", "Tungurahua",
+    "Azuay",
+    "Bolívar",
+    "Cañar",
+    "Carchi",
+    "Chimborazo",
+    "Cotopaxi",
+    "El Oro",
+    "Esmeraldas",
+    "Galápagos",
+    "Guayas",
+    "Imbabura",
+    "Loja",
+    "Los Ríos",
+    "Manabí",
+    "Morona Santiago",
+    "Napo",
+    "Orellana",
+    "Pastaza",
+    "Pichincha",
+    "Santa Elena",
+    "Santo Domingo de los Tsáchilas",
+    "Sucumbíos",
+    "Tungurahua",
     "Zamora Chinchipe",
 ]
 
 
+# ============================================================
+# FUNCIONES GENERALES
+# ============================================================
+
 def normalizar_texto(valor):
-    texto = str(valor or "").lower()
-    texto = unicodedata.normalize("NFKD", texto)
-    texto = "".join(
-        c for c in texto
-        if not unicodedata.combining(c)
+
+    texto = unicodedata.normalize(
+        "NFKD",
+        str(valor or "").lower()
     )
-    return re.sub(r"\s+", " ", texto).strip()
+
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if not unicodedata.combining(caracter)
+    )
+
+    return re.sub(
+        r"\s+",
+        " ",
+        texto
+    ).strip()
 
 
 def clave(valor):
-    texto = normalizar_texto(valor)
-    return re.sub(r"[^a-z0-9]+", "_", texto).strip("_")
+
+    return re.sub(
+        r"[^a-z0-9]+",
+        "_",
+        normalizar_texto(valor)
+    ).strip("_")
 
 
 def campo(fila, *nombres):
+
     for nombre in nombres:
+
         valor = fila.get(clave(nombre))
-        if valor is not None and str(valor).strip():
+
+        if (
+            valor is not None
+            and str(valor).strip()
+        ):
             return str(valor).strip()
+
     return ""
 
 
 def convertir_numero(valor):
-    texto = re.sub(r"[^\d,.-]", "", str(valor or ""))
+
+    texto = re.sub(
+        r"[^\d,.-]",
+        "",
+        str(valor or "")
+    )
+
     if not texto:
         return None
+
     try:
+
         if "," in texto and "." in texto:
+
             if texto.rfind(",") > texto.rfind("."):
-                texto = texto.replace(".", "").replace(",", ".")
+
+                texto = texto.replace(".", "")
+                texto = texto.replace(",", ".")
+
             else:
                 texto = texto.replace(",", "")
+
         elif "," in texto:
-            texto = texto.replace(",", ".")
+
+            if len(texto.split(",")[-1]) == 3:
+                texto = texto.replace(",", "")
+            else:
+                texto = texto.replace(",", ".")
+
+        elif texto.count(".") > 1:
+
+            texto = texto.replace(".", "")
+
         return float(texto)
+
     except ValueError:
         return None
 
 
 def convertir_fecha(valor):
+
     if not valor:
         return None
+
     try:
-        fecha = pd.to_datetime(valor, errors="coerce")
+
+        fecha = pd.to_datetime(
+            valor,
+            errors="coerce",
+            utc=True
+        )
+
         if pd.isna(fecha):
             return None
+
         return fecha.strftime("%Y-%m-%d")
-    except Exception:
+
+    except (TypeError, ValueError):
         return None
 
 
+# ============================================================
+# CLASIFICACIÓN DE PROYECTOS
+# ============================================================
+
 def clasificar_categoria(titulo, descripcion):
+
     texto = normalizar_texto(
         f"{titulo} {descripcion}"
     )
+
     encontradas = []
 
-    for categoria, palabras in CATEGORIAS.items():
+    for nombre, terminos in CATEGORIAS.items():
+
         if any(
-            normalizar_texto(p) in texto
-            for p in palabras
+            normalizar_texto(termino) in texto
+            for termino in terminos
         ):
-            encontradas.append(categoria)
+            encontradas.append(nombre)
 
     return encontradas
 
 
+# ============================================================
+# NORMALIZACIÓN COLOMBIA
+# ============================================================
+
 def normalizar_colombia(fila):
+
     datos = {
-        clave(k): v for k, v in fila.items()
+        clave(k): v
+        for k, v in fila.items()
     }
 
     titulo = campo(
-        datos, "nombre_del_procedimiento"
+        datos,
+        "nombre_del_procedimiento",
+        "nombre_del_proceso",
+        "objeto",
     )
+
     descripcion = campo(
-        datos, "descripci_n_del_procedimiento",
-        "descripcion_del_procedimiento"
+        datos,
+        "descripci_n_del_procedimiento",
+        "descripcion_del_procedimiento",
+        "descripcion",
     )
 
-    enlace = campo(
-        datos, "urlproceso", "url_proceso"
+    enlace_original = (
+        fila.get("urlproceso")
+        or fila.get("url_proceso")
+        or ""
     )
 
-    # Socrata puede devolver URL como objeto.
-    if isinstance(fila.get("urlproceso"), dict):
-        enlace = fila["urlproceso"].get("url", "")
+    if isinstance(enlace_original, dict):
+
+        enlace = enlace_original.get(
+            "url",
+            ""
+        )
+
+    else:
+
+        enlace = str(enlace_original)
 
     return {
         "pais": "Colombia",
+
         "titulo": titulo,
+
         "descripcion": descripcion,
-        "entidad": campo(datos, "entidad"),
-        "region": campo(
-            datos, "departamento_entidad"
-        ) or "Sin determinar",
-        "localidad": campo(
-            datos, "ciudad_entidad"
-        ) or "Sin determinar",
-        "presupuesto": convertir_numero(
-            campo(datos, "precio_base")
+
+        "entidad": campo(
+            datos,
+            "entidad",
+            "nombre_de_la_entidad",
         ),
+
+        "region": campo(
+            datos,
+            "departamento_entidad",
+            "departamento",
+        ) or "Sin determinar",
+
+        "localidad": campo(
+            datos,
+            "ciudad_entidad",
+            "municipio_entidad",
+        ) or "Sin determinar",
+
+        "presupuesto": convertir_numero(
+            campo(
+                datos,
+                "precio_base",
+                "valor_del_contrato",
+            )
+        ),
+
         "moneda": "COP",
+
         "fecha_cierre": convertir_fecha(
             campo(
                 datos,
                 "fecha_de_recepcion_de_respuestas",
-                "fecha_de_cierre_del_proceso"
+                "fecha_de_cierre_del_proceso",
             )
         ),
+
         "fecha_publicacion": convertir_fecha(
             campo(
-                datos, "fecha_de_publicacion_del"
+                datos,
+                "fecha_de_publicacion_del",
+                "fecha_de_publicacion_del_proceso",
             )
         ),
+
         "codigo": campo(
-            datos, "id_del_proceso",
-            "referencia_del_proceso"
+            datos,
+            "id_del_proceso",
+            "referencia_del_proceso",
         ),
+
         "enlace": enlace,
+
         "estado": campo(
-            datos, "estado_del_procedimiento",
-            "estado_del_proceso"
+            datos,
+            "estado_del_procedimiento",
+            "estado_del_proceso",
         ),
+
         "fuente": "SECOP II",
+
         "ubicacion_confirmada": False,
-        "tipo_ubicacion": "Sede de entidad contratante",
+
+        "tipo_ubicacion": (
+            "Sede de entidad contratante"
+        ),
+
         "categorias": clasificar_categoria(
-            titulo, descripcion
+            titulo,
+            descripcion,
         ),
     }
 
 
+# ============================================================
+# NORMALIZACIÓN ECUADOR
+# ============================================================
+
 def normalizar_ecuador(fila):
+
     titulo = str(
         fila.get("description")
         or fila.get("title")
         or ""
     )
-    codigo = str(
-        fila.get("ocid")
-        or fila.get("title")
+
+    descripcion = str(
+        fila.get("description")
         or ""
     )
-    descripcion = str(
-        fila.get("description") or ""
-    )
-    entidad = str(
-        fila.get("buyerName") or ""
+
+    codigo = str(
+        fila.get("ocid")
+        or fila.get("id")
+        or ""
     )
 
     return {
         "pais": "Ecuador",
+
         "titulo": titulo,
+
         "descripcion": descripcion,
-        "entidad": entidad,
+
+        "entidad": str(
+            fila.get("buyerName")
+            or ""
+        ),
+
         "region": "Sin determinar",
+
         "localidad": "Sin determinar",
+
         "presupuesto": None,
+
         "moneda": "USD",
+
         "fecha_cierre": None,
+
         "fecha_publicacion": convertir_fecha(
             fila.get("date")
         ),
+
         "codigo": codigo,
+
         "enlace": "",
+
         "estado": "No verificado",
+
         "fuente": "SERCOP - OCDS",
+
         "ubicacion_confirmada": False,
+
         "tipo_ubicacion": "No determinada",
+
         "categorias": clasificar_categoria(
-            titulo, descripcion
+            titulo,
+            descripcion,
         ),
+
         "ocid": codigo,
+
         "tipo_procedimiento": str(
-            fila.get("internal_type") or ""
+            fila.get("internal_type")
+            or ""
         ),
     }
 
 
-def extraer_error(error):
-    return f"{type(error).__name__}: {error}"
-
+# ============================================================
+# CONSULTAR COLOMBIA - SECOP II
+# ============================================================
 
 def consultar_colombia(
     categoria="Todas",
@@ -295,106 +486,146 @@ def consultar_colombia(
     dias=180,
     limite=300,
 ):
-    """
-    Consulta SECOP II mediante SoQL.
-    La búsqueda ocurre en el servidor.
 
-    No garantiza que todos los procesos
-    recuperados sigan abiertos.
-    """
-
-    hoy = date.today()
-    desde = hoy - timedelta(days=int(dias))
-
-    palabras = []
+    desde = (
+        date.today()
+        - timedelta(days=int(dias))
+    )
 
     if categoria != "Todas":
-        palabras.extend(
-            CONSULTAS.get(categoria, [])
+
+        palabras = list(
+            CONSULTAS.get(
+                categoria,
+                []
+            )
         )
 
+    else:
+
+        palabras = [
+            palabra
+            for grupo in CONSULTAS.values()
+            for palabra in grupo
+        ]
+
     if busqueda.strip():
-        palabras.append(busqueda.strip())
 
-    # Si no se especifica categoría, se buscan
-    # todas las líneas comerciales de INTILED.
-    if not palabras:
-        for lista in CONSULTAS.values():
-            palabras.extend(lista)
+        palabras.insert(
+            0,
+            busqueda.strip()
+        )
 
-    palabras = list(dict.fromkeys(palabras))
+    palabras = list(
+        dict.fromkeys(palabras)
+    )
 
     condiciones = []
 
     for palabra in palabras:
-        limpia = normalizar_texto(palabra)
-        limpia = limpia.replace("'", "''")
+
+        palabra = normalizar_texto(
+            palabra
+        ).replace("'", "''")
 
         condiciones.append(
             "("
             "lower(nombre_del_procedimiento) "
-            f"like '%{limpia}%' "
+            f"like '%{palabra}%' "
             "OR "
             "lower(descripci_n_del_procedimiento) "
-            f"like '%{limpia}%'"
+            f"like '%{palabra}%'"
             ")"
         )
 
-    filtro_texto = " OR ".join(condiciones)
-
-    filtro_fecha = (
+    where = (
         "fecha_de_publicacion_del >= "
         f"'{desde.isoformat()}T00:00:00'"
     )
 
-    where = f"({filtro_fecha})"
+    if condiciones:
 
-    if filtro_texto:
-        where += f" AND ({filtro_texto})"
-
-    parametros = {
-        "$where": where,
-        "$order": (
-            "fecha_de_publicacion_del DESC"
-        ),
-        "$limit": min(int(limite), 1000),
-    }
+        where += (
+            " AND ("
+            + " OR ".join(condiciones)
+            + ")"
+        )
 
     try:
+
         respuesta = requests.get(
             SECOP_URL,
-            params=parametros,
-            timeout=40,
+
+            params={
+                "$where": where,
+
+                "$order": (
+                    "fecha_de_publicacion_del DESC"
+                ),
+
+                "$limit": min(
+                    int(limite),
+                    1000
+                ),
+            },
+
+            timeout=(7, 25),
+
             headers={
                 "Accept": "application/json",
-                "User-Agent": "INTI-Projects/2.0",
+
+                "User-Agent": (
+                    "INTI-Projects/2.1"
+                ),
             },
         )
+
         respuesta.raise_for_status()
+
         datos = respuesta.json()
 
         if not isinstance(datos, list):
-            return [], "Respuesta SECOP no válida."
 
-        registros = [
-            normalizar_colombia(item)
-            for item in datos
-            if isinstance(item, dict)
-        ]
+            return [], (
+                "SECOP II devolvió "
+                "un formato inesperado."
+            )
 
-        registros = [
-            item for item in registros
-            if item["titulo"]
-        ]
+        registros = []
+
+        for fila in datos:
+
+            if not isinstance(fila, dict):
+                continue
+
+            registro = normalizar_colombia(
+                fila
+            )
+
+            if registro["titulo"]:
+                registros.append(registro)
 
         return registros, None
 
-    except Exception as error:
+    except requests.RequestException as error:
+
         return [], (
-            "Error consultando SECOP II: "
-            + extraer_error(error)
+            "No fue posible consultar SECOP II: "
+            f"{type(error).__name__}: {error}"
         )
 
+    except (ValueError, TypeError) as error:
+
+        return [], (
+            "No se pudo interpretar la "
+            f"respuesta SECOP II: {error}"
+        )
+
+
+# ============================================================
+# CONSULTAR ECUADOR - SERCOP
+# CONTROL DE TIMEOUT Y ERRORES
+# ============================================================
 
 def consultar_ecuador(
     categoria="Todas",
@@ -402,172 +633,332 @@ def consultar_ecuador(
     anio=None,
     paginas=2,
 ):
-    """
-    Consulta la API oficial OCDS de SERCOP.
 
-    Requiere palabra clave y año.
-    La API puede contener procedimientos
-    históricos o ya adjudicados.
+    """
+    Consulta limitada de la API oficial SERCOP.
+
+    Evita realizar múltiples solicitudes
+    prolongadas cuando el servidor no responde.
+
+    Conserva los parámetros utilizados
+    por modules/radar.py.
+
+    No garantiza que la API esté disponible
+    desde Streamlit Cloud.
     """
 
-    anio = int(anio or date.today().year)
+    anio = int(
+        anio or date.today().year
+    )
 
     palabras = []
 
-    if categoria != "Todas":
-        palabras.extend(
-            CONSULTAS.get(categoria, [])
+    if busqueda.strip():
+
+        palabras.append(
+            busqueda.strip()
         )
 
-    if busqueda.strip():
-        palabras.append(busqueda.strip())
+    if categoria != "Todas":
+
+        palabras.extend(
+            CONSULTAS.get(
+                categoria,
+                []
+            )
+        )
 
     if not palabras:
-        for lista in CONSULTAS.values():
-            palabras.extend(lista)
 
-    palabras = list(dict.fromkeys(palabras))
+        palabras = [
+            "alumbrado",
+            "solar",
+            "fotovoltaico",
+            "electrica",
+        ]
+
+    # Evita consultas repetidas.
+    palabras = list(
+        dict.fromkeys(palabras)
+    )
+
+    # Máximo tres términos por ejecución.
+    palabras = palabras[:3]
 
     resultados = []
-    errores = []
     vistos = set()
+    errores = []
 
-    # Máximo de términos por ejecución para
-    # evitar consultas excesivas.
-    for palabra in palabras[:8]:
-        for pagina in range(
-            1, min(int(paginas), 3) + 1
-        ):
+    consultas_exitosas = 0
+
+    with requests.Session() as sesion:
+
+        sesion.headers.update({
+            "Accept": "application/json",
+
+            "User-Agent": (
+                "INTI-Projects/2.1"
+            ),
+        })
+
+        for palabra in palabras:
+
             try:
-                respuesta = requests.get(
+
+                respuesta = sesion.get(
                     SERCOP_API,
+
                     params={
                         "year": anio,
                         "search": palabra,
-                        "page": pagina,
+                        "page": 1,
                     },
-                    timeout=35,
-                    headers={
-                        "Accept": "application/json",
-                        "User-Agent": "INTI-Projects/2.0",
-                    },
+
+                    # 5 segundos para conectar.
+                    # 12 segundos para recibir datos.
+                    timeout=(5, 12),
                 )
 
                 respuesta.raise_for_status()
+
                 contenido = respuesta.json()
 
-                if not isinstance(contenido, dict):
+                if not isinstance(
+                    contenido,
+                    dict
+                ):
+
+                    errores.append(
+                        "SERCOP devolvió un "
+                        "formato inesperado."
+                    )
+
                     continue
 
-                datos = contenido.get("data", [])
+                datos = contenido.get(
+                    "data",
+                    []
+                )
 
-                if not isinstance(datos, list):
+                if not isinstance(
+                    datos,
+                    list
+                ):
+
+                    errores.append(
+                        "SERCOP devolvió registros "
+                        "con formato inesperado."
+                    )
+
                     continue
+
+                consultas_exitosas += 1
 
                 for fila in datos:
-                    if not isinstance(fila, dict):
+
+                    if not isinstance(
+                        fila,
+                        dict
+                    ):
                         continue
 
-                    item = normalizar_ecuador(fila)
-                    identificador = item["codigo"]
+                    item = normalizar_ecuador(
+                        fila
+                    )
 
-                    if not identificador:
+                    codigo = item.get(
+                        "codigo"
+                    )
+
+                    if not codigo:
                         continue
 
-                    if identificador in vistos:
+                    if codigo in vistos:
                         continue
 
-                    vistos.add(identificador)
-                    resultados.append(item)
+                    vistos.add(
+                        codigo
+                    )
 
-                total_paginas = contenido.get(
-                    "pages", 1
-                )
+                    resultados.append(
+                        item
+                    )
 
-                try:
-                    if pagina >= int(total_paginas):
-                        break
-                except (ValueError, TypeError):
-                    pass
+            except requests.exceptions.ConnectTimeout:
 
-            except Exception as error:
                 errores.append(
-                    f"{palabra}, página {pagina}: "
-                    + extraer_error(error)
+                    "El servidor oficial SERCOP "
+                    "no aceptó la conexión a tiempo."
                 )
+
+                # No insistimos con otros términos.
+                break
+
+            except requests.exceptions.ReadTimeout:
+
+                errores.append(
+                    "SERCOP aceptó la conexión, "
+                    "pero no respondió a tiempo."
+                )
+
+                break
+
+            except requests.exceptions.RequestException as error:
+
+                errores.append(
+                    "Error de comunicación "
+                    "con SERCOP "
+                    f"({type(error).__name__})."
+                )
+
+                break
+
+            except ValueError:
+
+                errores.append(
+                    "SERCOP no devolvió "
+                    "JSON válido."
+                )
+
                 break
 
     resultados.sort(
-        key=lambda x: (
-            x.get("fecha_publicacion") or ""
+        key=lambda item: (
+            item.get(
+                "fecha_publicacion"
+            ) or ""
         ),
         reverse=True,
     )
 
-    if not resultados and errores:
-        return [], (
-            "SERCOP no respondió correctamente. "
-            + errores[0]
+    # Sin conexión ni consultas exitosas.
+    if not consultas_exitosas:
+
+        mensaje = (
+            "No fue posible conectar con "
+            "la API oficial de SERCOP desde "
+            "INTI Projects. Esto no significa "
+            "que no existan convocatorias "
+            "en Ecuador."
         )
 
+        if errores:
+            mensaje += " " + errores[0]
+
+        return [], mensaje
+
+    # Se obtuvieron algunos datos.
     if errores:
+
         return resultados, (
-            "Consulta parcial: algunas búsquedas "
-            "de SERCOP no respondieron. "
-            + errores[0]
+            "Consulta parcial: algunas "
+            "solicitudes a SERCOP "
+            "no se completaron."
         )
 
     return resultados, None
 
 
+# ============================================================
+# DETALLE DE PROCESOS ECUADOR
+# ============================================================
+
 def consultar_detalle_ecuador(ocid):
+
     if not ocid:
-        return None, "OCID no disponible."
+
+        return None, (
+            "OCID no disponible."
+        )
 
     try:
+
         respuesta = requests.get(
             SERCOP_RECORD,
-            params={"ocid": ocid},
-            timeout=35,
+
+            params={
+                "ocid": ocid
+            },
+
+            timeout=(5, 12),
         )
+
         respuesta.raise_for_status()
+
         return respuesta.json(), None
 
-    except Exception as error:
-        return None, extraer_error(error)
+    except (
+        requests.RequestException,
+        ValueError
+    ) as error:
 
+        return None, (
+            "No fue posible recuperar "
+            "el detalle SERCOP: "
+            f"{type(error).__name__}"
+        )
+
+
+# ============================================================
+# ENRIQUECER DATOS ECUADOR
+# ============================================================
 
 def enriquecer_ecuador(item, detalle):
-    """
-    Obtiene datos disponibles en el registro
-    OCDS sin inventar ubicaciones ni fechas.
-    """
 
     item = dict(item)
 
-    if not isinstance(detalle, dict):
+    if not isinstance(
+        detalle,
+        dict
+    ):
         return item
 
-    registros = detalle.get("records", [])
+    registros = detalle.get(
+        "records",
+        []
+    )
 
-    if not isinstance(registros, list):
+    if not isinstance(
+        registros,
+        list
+    ):
         return item
 
     for registro in registros:
-        entregas = registro.get("releases", [])
+
+        entregas = registro.get(
+            "releases",
+            []
+        )
 
         for entrega in entregas:
-            tender = entrega.get("tender", {}) or {}
+
+            tender = (
+                entrega.get(
+                    "tender",
+                    {}
+                ) or {}
+            )
 
             item["estado"] = (
                 tender.get("status")
                 or item["estado"]
             )
 
-            valor = tender.get("value", {}) or {}
+            valor = (
+                tender.get(
+                    "value",
+                    {}
+                ) or {}
+            )
 
-            if isinstance(valor, dict):
+            if isinstance(
+                valor,
+                dict
+            ):
+
                 if valor.get("amount") is not None:
+
                     item["presupuesto"] = (
                         convertir_numero(
                             valor["amount"]
@@ -575,108 +966,157 @@ def enriquecer_ecuador(item, detalle):
                     )
 
                 item["moneda"] = (
-                    valor.get("currency")
+                    valor.get(
+                        "currency"
+                    )
                     or item["moneda"]
                 )
 
             periodo = (
-                tender.get("tenderPeriod", {})
-                or {}
+                tender.get(
+                    "tenderPeriod",
+                    {}
+                ) or {}
             )
 
-            fecha = convertir_fecha(
-                periodo.get("endDate")
+            fecha_cierre = convertir_fecha(
+                periodo.get(
+                    "endDate"
+                )
             )
 
-            if fecha:
-                item["fecha_cierre"] = fecha
+            if fecha_cierre:
+
+                item["fecha_cierre"] = (
+                    fecha_cierre
+                )
 
             documentos = tender.get(
-                "documents", []
-            )
+                "documents",
+                []
+            ) or []
 
-            if isinstance(documentos, list):
-                for documento in documentos:
-                    enlace = documento.get("url", "")
-                    if enlace.startswith(
+            for documento in documentos:
+
+                if not isinstance(
+                    documento,
+                    dict
+                ):
+                    continue
+
+                enlace = documento.get(
+                    "url",
+                    ""
+                )
+
+                if (
+                    isinstance(enlace, str)
+                    and enlace.startswith(
                         ("https://", "http://")
-                    ):
-                        item["enlace"] = enlace
-                        break
+                    )
+                ):
+
+                    item["enlace"] = enlace
+                    break
 
     return item
 
 
+# ============================================================
+# IMPORTACIÓN CSV ECUADOR
+# ============================================================
+
 def importar_ecuador(archivo):
-    """
-    Compatibilidad con archivos CSV.
-    No es el método principal de consulta.
-    """
 
     if archivo is None:
         return [], None
 
     contenido = archivo.getvalue()
 
-    for encoding in ("utf-8-sig", "latin-1"):
+    for codificacion in (
+        "utf-8-sig",
+        "latin-1"
+    ):
+
         try:
+
             df = pd.read_csv(
-                io.BytesIO(contenido),
-                encoding=encoding,
+                io.BytesIO(
+                    contenido
+                ),
+
+                encoding=codificacion,
+
                 sep=None,
+
                 engine="python",
+
                 dtype=str,
             )
 
             registros = []
 
-            for fila in df.fillna("").to_dict(
-                "records"
-            ):
-                normalizada = {
+            filas = (
+                df.fillna("")
+                .to_dict("records")
+            )
+
+            for fila in filas:
+
+                datos = {
                     clave(k): v
                     for k, v in fila.items()
                 }
 
                 item = normalizar_ecuador({
                     "title": campo(
-                        normalizada,
-                        "title", "titulo", "objeto"
+                        datos,
+                        "title",
+                        "titulo",
+                        "objeto",
                     ),
+
                     "description": campo(
-                        normalizada,
+                        datos,
                         "description",
                         "descripcion",
-                        "objeto"
+                        "objeto",
                     ),
+
                     "buyerName": campo(
-                        normalizada,
+                        datos,
                         "buyername",
-                        "entidad"
+                        "entidad",
                     ),
+
                     "ocid": campo(
-                        normalizada,
-                        "ocid", "codigo"
+                        datos,
+                        "ocid",
+                        "codigo",
                     ),
+
                     "date": campo(
-                        normalizada,
+                        datos,
                         "date",
-                        "fecha_publicacion"
+                        "fecha_publicacion",
                     ),
                 })
 
                 item["region"] = (
                     campo(
-                        normalizada,
+                        datos,
                         "provincia"
-                    ) or "Sin determinar"
+                    )
+                    or "Sin determinar"
                 )
 
                 item["localidad"] = (
                     campo(
-                        normalizada,
-                        "canton", "ciudad"
-                    ) or "Sin determinar"
+                        datos,
+                        "canton",
+                        "ciudad"
+                    )
+                    or "Sin determinar"
                 )
 
                 item["fuente"] = (
@@ -684,25 +1124,61 @@ def importar_ecuador(archivo):
                 )
 
                 if item["titulo"]:
-                    registros.append(item)
+
+                    registros.append(
+                        item
+                    )
 
             return registros, None
 
-        except Exception:
+        except (
+            pd.errors.ParserError,
+            UnicodeError,
+            ValueError
+        ):
+
             continue
 
-    return [], "No se pudo interpretar el CSV."
+    return [], (
+        "No se pudo interpretar "
+        "el archivo CSV."
+    )
 
 
-def opciones_territoriales(datos, campo):
-    valores = sorted({
-        str(item.get(campo, "")).strip()
-        for item in datos
-        if item.get(campo)
-        and item.get(campo) != "Sin determinar"
-    })
-    return ["Todas"] + valores
+# ============================================================
+# FILTROS TERRITORIALES
+# ============================================================
 
+def opciones_territoriales(
+    oportunidades,
+    campo_nombre,
+):
+
+    valores = set()
+
+    for item in oportunidades:
+
+        valor = str(
+            item.get(
+                campo_nombre,
+                ""
+            )
+        ).strip()
+
+        if valor and valor != "Sin determinar":
+
+            valores.add(
+                valor
+            )
+
+    return [
+        "Todas"
+    ] + sorted(valores)
+
+
+# ============================================================
+# FILTRAR OPORTUNIDADES
+# ============================================================
 
 def filtrar_oportunidades(
     oportunidades,
@@ -712,7 +1188,11 @@ def filtrar_oportunidades(
     decision="Todas",
     categoria="Todas",
 ):
-    texto = normalizar_texto(texto)
+
+    texto = normalizar_texto(
+        texto
+    )
+
     resultado = []
 
     for item in oportunidades:
@@ -732,65 +1212,100 @@ def filtrar_oportunidades(
         if (
             categoria != "Todas"
             and categoria not in item.get(
-                "categorias", []
+                "categorias",
+                []
             )
         ):
             continue
 
-        evaluacion = item.get(
-            "evaluacion", {}
-        )
+        if decision != "Todas":
 
-        if (
-            decision != "Todas"
-            and evaluacion.get("decision")
-            != decision
-        ):
-            continue
+            evaluacion = item.get(
+                "evaluacion",
+                {}
+            )
+
+            if (
+                evaluacion.get(
+                    "decision"
+                ) != decision
+            ):
+                continue
 
         contenido = normalizar_texto(
-            " ".join([
-                item.get("titulo", ""),
-                item.get("descripcion", ""),
-                item.get("entidad", ""),
-                item.get("codigo", ""),
-            ])
+            " ".join(
+                str(
+                    item.get(
+                        campo_nombre,
+                        ""
+                    ) or ""
+                )
+                for campo_nombre in (
+                    "titulo",
+                    "descripcion",
+                    "entidad",
+                    "codigo",
+                )
+            )
         )
 
         if texto and texto not in contenido:
             continue
 
-        resultado.append(item)
+        resultado.append(
+            item
+        )
 
     return resultado
 
 
+# ============================================================
+# DETERMINAR VIGENCIA
+# ============================================================
+
 def estado_vigencia(item):
-    """
-    Evita declarar abierto un proceso
-    solo por tener fecha futura.
-    """
 
     estado = normalizar_texto(
-        item.get("estado", "")
+        item.get(
+            "estado",
+            ""
+        )
     )
 
-    cerrados = [
-        "adjudicado", "cancelado",
-        "desierto", "terminado",
-        "cerrado", "awarded",
-        "cancelled", "complete",
+    estados_cerrados = [
+        "adjudicado",
+        "cancelado",
+        "desierto",
+        "terminado",
+        "cerrado",
+        "awarded",
+        "cancelled",
+        "complete",
     ]
 
-    if any(p in estado for p in cerrados):
+    if any(
+        palabra in estado
+        for palabra in estados_cerrados
+    ):
+
         return "No vigente"
 
-    cierre = item.get("fecha_cierre")
+    cierre = item.get(
+        "fecha_cierre"
+    )
 
     if cierre:
+
         try:
-            if date.fromisoformat(cierre) < date.today():
+
+            fecha = date.fromisoformat(
+                cierre
+            )
+
+            if fecha < date.today():
+
                 return "Plazo vencido"
+
         except ValueError:
             pass
 
