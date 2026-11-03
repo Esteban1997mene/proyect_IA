@@ -1,55 +1,65 @@
 
 /* ==========================================================
    INTI PROJECTS ENTERPRISE
-   SISTEMA VISUAL CORPORATIVO
+   SISTEMA DE DISEÑO CORPORATIVO
    INTILED SAS BIC
+   Versión 2.0
+   ========================================================== */
+
+/* ==========================================================
+   1. VARIABLES CORPORATIVAS
    ========================================================== */
 
 :root {
     --inti-orange: #F47721;
-    --inti-orange-hover: #E56712;
-    --inti-orange-light: #FFF1E5;
+    --inti-orange-hover: #E66512;
+    --inti-orange-soft: #FFF1E5;
 
-    --inti-dark: #202630;
     --inti-sidebar: #1C2430;
     --inti-sidebar-hover: #303A48;
+    --inti-sidebar-border: #35404D;
 
-    --inti-bg: #F5F7FA;
-    --inti-card: #FFFFFF;
+    --inti-background: #F5F7FA;
+    --inti-white: #FFFFFF;
+
     --inti-text: #242C39;
-    --inti-muted: #707A89;
-    --inti-border: #E6EAF0;
+    --inti-text-secondary: #707A89;
+    --inti-border: #E5EAF0;
 
     --inti-success: #16866B;
+    --inti-warning: #D58B16;
     --inti-danger: #C94444;
 
     --inti-radius: 14px;
-    --inti-shadow: 0 4px 18px rgba(23,32,46,.045);
+    --inti-shadow: 0 4px 18px rgba(23,32,46,0.05);
 }
 
 /* ==========================================================
-   APLICACIÓN
+   2. ESTRUCTURA GENERAL
    ========================================================== */
 
 .stApp {
-    background: var(--inti-bg);
+    background: var(--inti-background);
     color: var(--inti-text);
-    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    font-family: "Inter", "Segoe UI", Arial, sans-serif;
 }
 
 [data-testid="stAppViewContainer"] {
-    background: var(--inti-bg);
+    background: var(--inti-background);
 }
 
-.main .block-container,
+[data-testid="stMain"] {
+    background: var(--inti-background);
+}
+
 [data-testid="stMainBlockContainer"] {
     max-width: 1500px;
-    padding-top: 2.1rem;
+    padding-top: 2rem;
     padding-bottom: 4rem;
 }
 
 /* ==========================================================
-   BARRA LATERAL
+   3. MENÚ LATERAL CORPORATIVO
    ========================================================== */
 
 section[data-testid="stSidebar"],
@@ -58,18 +68,14 @@ section[data-testid="stSidebar"],
 }
 
 section[data-testid="stSidebar"] {
-    border-right: 1px solid #35404E;
-}
-
-section[data-testid="stSidebar"] .block-container {
-    padding-top: 1.4rem;
+    border-right: 1px solid var(--inti-sidebar-border);
 }
 
 section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
     color: #D9DFE8;
 }
 
-/* Marca corporativa */
+/* Marca INTI */
 
 .inti-brand {
     display: flex;
@@ -79,23 +85,32 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
 }
 
 .inti-brand-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     width: 47px;
     height: 47px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
     border-radius: 13px;
-    background: linear-gradient(135deg, #FF9B48, #F47721);
+
+    background: linear-gradient(
+        135deg,
+        #FF9B48,
+        #F47721
+    );
+
     color: #FFFFFF;
     font-size: 24px;
-    box-shadow: 0 5px 18px rgba(244,119,33,.2);
+
+    box-shadow:
+        0 5px 18px rgba(244,119,33,0.20);
 }
 
 .inti-brand-name {
     font-size: 24px;
     font-weight: 800;
-    letter-spacing: .5px;
+    letter-spacing: 0.5px;
     color: #FFFFFF;
     line-height: 1.1;
 }
@@ -108,65 +123,114 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
     color: #AAB5C3;
 }
 
+/* Separadores */
+
 .inti-sidebar-divider {
     height: 1px;
     margin: 12px 8px 20px;
-    background: #35404D;
+    background: var(--inti-sidebar-border);
 }
+
+/* Títulos de grupos */
 
 .inti-menu-heading {
     margin: 20px 11px 9px;
+
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 1.6px;
+
     color: #8390A2;
 }
 
-/* Botones de navegación */
+/* ==========================================================
+   4. BOTONES DEL MENÚ
+   ========================================================== */
+
+/* Estilo base de navegación */
 
 section[data-testid="stSidebar"]
-div[class*="st-key-inti-nav-"] {
-    margin-bottom: 3px;
-}
-
-section[data-testid="stSidebar"]
-div[class*="st-key-inti-nav-"] button {
+div[data-testid="stButton"] button {
     width: 100%;
     min-height: 40px;
-    border: 1px solid transparent !important;
+
     border-radius: 10px !important;
-    background: transparent !important;
-    color: #C8D1DD !important;
-    justify-content: flex-start !important;
+    border: 1px solid transparent !important;
+
     text-align: left !important;
+    justify-content: flex-start !important;
+
     font-size: 13px;
     font-weight: 500;
+
     padding: 8px 12px;
+
     box-shadow: none !important;
-    transition: background .18s ease,
-                color .18s ease,
-                transform .18s ease;
+
+    transition:
+        background 0.18s ease,
+        color 0.18s ease,
+        transform 0.18s ease;
 }
 
+/* Texto de los botones */
+
 section[data-testid="stSidebar"]
-div[class*="st-key-inti-nav-"] button p {
+div[data-testid="stButton"] button p {
     color: inherit !important;
+    font-size: 13px;
 }
 
+/* Botones normales */
+
 section[data-testid="stSidebar"]
-div[class*="st-key-inti-nav-"] button:hover {
+button[kind="tertiary"],
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-tertiary"] {
+    background: transparent !important;
+    color: #C8D1DD !important;
+    border: 1px solid transparent !important;
+}
+
+/* Hover normal */
+
+section[data-testid="stSidebar"]
+button[kind="tertiary"]:hover,
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-tertiary"]:hover {
     background: var(--inti-sidebar-hover) !important;
     color: #FFFFFF !important;
     transform: translateX(2px);
 }
 
+/* Opción activa */
+
 section[data-testid="stSidebar"]
-div[class*="st-key-inti-nav-active"] button {
-    background: rgba(244,119,33,.17) !important;
+button[kind="primary"],
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-primary"] {
+    background: rgba(244,119,33,0.18) !important;
+
+    color: #FFAD72 !important;
+
+    border: 1px solid transparent !important;
     border-left: 3px solid var(--inti-orange) !important;
-    color: #FFAB70 !important;
+
     font-weight: 700;
+    box-shadow: none !important;
 }
+
+/* Hover activo */
+
+section[data-testid="stSidebar"]
+button[kind="primary"]:hover,
+section[data-testid="stSidebar"]
+button[data-testid="stBaseButton-primary"]:hover {
+    background: rgba(244,119,33,0.28) !important;
+    color: #FFFFFF !important;
+}
+
+/* Pie de navegación */
 
 .inti-sidebar-footer {
     padding: 8px 12px 15px;
@@ -176,7 +240,7 @@ div[class*="st-key-inti-nav-active"] button {
     color: #FFFFFF;
     font-size: 11px;
     font-weight: 750;
-    letter-spacing: .6px;
+    letter-spacing: 0.6px;
 }
 
 .inti-version {
@@ -186,20 +250,16 @@ div[class*="st-key-inti-nav-active"] button {
     line-height: 1.6;
 }
 
-/* Botón para volver a portada */
-
-section[data-testid="stSidebar"]
-button:not([data-testid]) {
-    border-radius: 10px;
-}
-
 /* ==========================================================
-   TIPOGRAFÍA
+   5. TIPOGRAFÍA
    ========================================================== */
 
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
     color: var(--inti-text);
-    letter-spacing: -.5px;
+    letter-spacing: -0.5px;
 }
 
 h1 {
@@ -220,7 +280,7 @@ p {
 }
 
 /* ==========================================================
-   BOTONES GENERALES
+   6. BOTONES GENERALES
    ========================================================== */
 
 .stButton > button,
@@ -228,64 +288,97 @@ p {
 .stDownloadButton > button {
     border-radius: 10px;
     font-weight: 650;
-    transition: transform .18s ease,
-                box-shadow .18s ease,
-                background .18s ease;
+
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        background 0.18s ease;
 }
 
 .stButton > button:hover,
 .stFormSubmitButton > button:hover,
 .stDownloadButton > button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 5px 16px rgba(20,30,45,.10);
+
+    box-shadow:
+        0 5px 16px rgba(20,30,45,0.10);
 }
 
+/* Botones primarios fuera del menú */
+
+[data-testid="stMain"]
 button[kind="primary"],
+[data-testid="stMain"]
 button[data-testid="stBaseButton-primary"] {
     background: var(--inti-orange) !important;
     border-color: var(--inti-orange) !important;
     color: #FFFFFF !important;
 }
 
+[data-testid="stMain"]
 button[kind="primary"]:hover,
+[data-testid="stMain"]
 button[data-testid="stBaseButton-primary"]:hover {
     background: var(--inti-orange-hover) !important;
     border-color: var(--inti-orange-hover) !important;
 }
 
+/* Botones secundarios */
+
+[data-testid="stMain"]
+button[kind="secondary"] {
+    background: #FFFFFF;
+    border: 1px solid var(--inti-border);
+    color: var(--inti-text);
+}
+
+[data-testid="stMain"]
+button[kind="secondary"]:hover {
+    border-color: var(--inti-orange);
+    color: var(--inti-orange);
+}
+
 /* ==========================================================
-   MÉTRICAS
+   7. INDICADORES EJECUTIVOS
    ========================================================== */
 
 div[data-testid="stMetric"] {
-    background: var(--inti-card);
+    background: var(--inti-white);
+
     border: 1px solid var(--inti-border);
     border-radius: var(--inti-radius);
+
     padding: 18px;
+
     box-shadow: var(--inti-shadow);
+
     min-height: 112px;
-    transition: transform .2s ease,
-                box-shadow .2s ease;
+
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 div[data-testid="stMetric"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(20,30,45,.075);
+
+    box-shadow:
+        0 8px 24px rgba(20,30,45,0.075);
 }
 
 div[data-testid="stMetricLabel"] {
-    color: var(--inti-muted);
+    color: var(--inti-text-secondary);
     font-weight: 600;
 }
 
 div[data-testid="stMetricValue"] {
     color: var(--inti-text);
     font-weight: 800;
-    letter-spacing: -.6px;
+    letter-spacing: -0.6px;
 }
 
 /* ==========================================================
-   TARJETAS
+   8. TARJETAS Y CONTENEDORES
    ========================================================== */
 
 div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -295,17 +388,20 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 div[data-testid="stVerticalBlockBorderWrapper"]:has(
     > div[data-testid="stVerticalBlock"]
 ) {
-    transition: box-shadow .2s ease;
+    transition: box-shadow 0.2s ease;
 }
 
 /* ==========================================================
-   FORMULARIOS
+   9. FORMULARIOS
    ========================================================== */
 
 div[data-testid="stForm"] {
     border: 1px solid var(--inti-border);
+
     border-radius: var(--inti-radius);
-    background: var(--inti-card);
+
+    background: var(--inti-white);
+
     padding: 20px;
 }
 
@@ -321,18 +417,20 @@ div[data-testid="stTextArea"] textarea:focus {
 }
 
 /* ==========================================================
-   TABLAS
+   10. TABLAS Y DATAFRAMES
    ========================================================== */
 
 div[data-testid="stDataFrame"] {
     overflow: hidden;
+
     border: 1px solid var(--inti-border);
     border-radius: 12px;
+
     background: #FFFFFF;
 }
 
 /* ==========================================================
-   PESTAÑAS
+   11. PESTAÑAS
    ========================================================== */
 
 button[data-baseweb="tab"] {
@@ -349,7 +447,7 @@ div[data-baseweb="tab-highlight"] {
 }
 
 /* ==========================================================
-   ALERTAS
+   12. ALERTAS
    ========================================================== */
 
 div[data-testid="stAlert"] {
@@ -357,7 +455,7 @@ div[data-testid="stAlert"] {
 }
 
 /* ==========================================================
-   COMPONENTES INTI PERSONALIZADOS
+   13. ENCABEZADOS CORPORATIVOS
    ========================================================== */
 
 .inti-page-header {
@@ -367,9 +465,12 @@ div[data-testid="stAlert"] {
 .inti-eyebrow {
     font-size: 11px;
     font-weight: 800;
+
     color: var(--inti-orange);
+
     letter-spacing: 2px;
     text-transform: uppercase;
+
     margin-bottom: 9px;
 }
 
@@ -377,13 +478,16 @@ div[data-testid="stAlert"] {
     font-size: clamp(29px, 3vw, 40px);
     font-weight: 800;
     letter-spacing: -1px;
+
     color: var(--inti-text);
+
     margin: 0;
 }
 
 .inti-page-description {
-    color: var(--inti-muted);
+    color: var(--inti-text-secondary);
     font-size: 14px;
+
     margin-top: 10px;
     max-width: 760px;
 }
@@ -391,55 +495,84 @@ div[data-testid="stAlert"] {
 .inti-section-title {
     font-size: 19px;
     font-weight: 750;
+
     margin: 12px 0 18px;
+
     color: var(--inti-text);
 }
+
+/* ==========================================================
+   14. BANNER EJECUTIVO
+   ========================================================== */
 
 .inti-hero {
     position: relative;
     overflow: hidden;
+
     background: linear-gradient(
         115deg,
         #202630,
         #303A48
     );
+
     border-radius: 18px;
+
     padding: 32px 34px;
+
     color: #FFFFFF;
+
     margin-bottom: 22px;
 }
 
+/* Decoración animada */
+
 .inti-hero::after {
     content: "";
+
     position: absolute;
+
     right: -65px;
     top: -100px;
+
     width: 320px;
     height: 320px;
+
     border-radius: 50%;
-    border: 1px solid rgba(244,119,33,.3);
+
+    border:
+        1px solid rgba(244,119,33,0.30);
+
     box-shadow:
-        0 0 0 40px rgba(244,119,33,.045),
-        0 0 0 90px rgba(244,119,33,.025);
-    animation: intiHeroPulse 8s ease-in-out infinite;
+        0 0 0 40px rgba(244,119,33,0.045),
+        0 0 0 90px rgba(244,119,33,0.025);
+
+    animation:
+        intiHeroPulse 8s ease-in-out infinite;
+
     pointer-events: none;
 }
 
 .inti-hero-title {
     position: relative;
     z-index: 1;
+
     color: #FFFFFF;
+
     font-size: clamp(25px, 3vw, 36px);
     font-weight: 800;
-    letter-spacing: -.8px;
+    letter-spacing: -0.8px;
 }
 
 .inti-hero-text {
     position: relative;
     z-index: 1;
+
     color: #CBD3DE;
+
     max-width: 680px;
+
     margin-top: 12px;
+
     font-size: 14px;
     line-height: 1.7;
 }
@@ -447,44 +580,73 @@ div[data-testid="stAlert"] {
 .inti-hero-tag {
     position: relative;
     z-index: 1;
+
     color: #FFAD72;
+
     font-size: 11px;
     font-weight: 750;
+
     letter-spacing: 1.5px;
+
     margin-bottom: 10px;
 }
 
+/* ==========================================================
+   15. TARJETAS PERSONALIZADAS INTI
+   ========================================================== */
+
 .inti-info-card {
     padding: 20px;
+
     border-radius: 14px;
+
     background: #FFFFFF;
+
     border: 1px solid var(--inti-border);
+
     min-height: 140px;
+
     box-shadow: var(--inti-shadow);
+
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.inti-info-card:hover {
+    transform: translateY(-3px);
+
+    box-shadow:
+        0 9px 25px rgba(20,30,45,0.08);
 }
 
 .inti-info-card-title {
     font-size: 15px;
     font-weight: 750;
+
     color: var(--inti-text);
+
     margin-bottom: 9px;
 }
 
 .inti-info-card-text {
     font-size: 12px;
-    color: var(--inti-muted);
+    color: var(--inti-text-secondary);
+
     line-height: 1.7;
 }
 
 /* ==========================================================
-   ANIMACIONES
+   16. ANIMACIONES
    ========================================================== */
 
 @keyframes intiHeroPulse {
+
     0%, 100% {
         transform: scale(1);
-        opacity: .7;
+        opacity: 0.7;
     }
+
     50% {
         transform: scale(1.08);
         opacity: 1;
@@ -492,10 +654,12 @@ div[data-testid="stAlert"] {
 }
 
 @keyframes intiAppear {
+
     from {
         opacity: 0;
         transform: translateY(7px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -503,11 +667,22 @@ div[data-testid="stAlert"] {
 }
 
 [data-testid="stMainBlockContainer"] {
-    animation: intiAppear .3s ease-out;
+    animation: intiAppear 0.3s ease-out;
 }
 
 /* ==========================================================
-   RESPONSIVE
+   17. ACCESIBILIDAD
+   ========================================================== */
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--inti-orange);
+    outline-offset: 2px;
+}
+
+/* ==========================================================
+   18. ADAPTACIÓN MÓVIL
    ========================================================== */
 
 @media (max-width: 768px) {
@@ -528,14 +703,26 @@ div[data-testid="stAlert"] {
         padding: 12px;
         min-height: 90px;
     }
+
+    .inti-page-title {
+        font-size: 28px;
+    }
 }
+
+/* ==========================================================
+   19. REDUCIR ANIMACIONES
+   ========================================================== */
 
 @media (prefers-reduced-motion: reduce) {
 
     *,
     *::before,
     *::after {
-        animation-duration: .01ms !important;
-        transition-duration: .01ms !important;
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
     }
 }
+
+/* ==========================================================
+   FIN DEL SISTEMA DE DISEÑO INTI
+   ========================================================== */
