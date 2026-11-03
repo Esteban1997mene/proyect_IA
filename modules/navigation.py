@@ -3,7 +3,7 @@ import streamlit as st
 
 # ============================================================
 # INTI PROJECTS AI
-# NAVEGACIÓN CORPORATIVA
+# NAVEGACIÓN CORPORATIVA - VERSIÓN CORREGIDA
 # INTILED SAS BIC
 # ============================================================
 
@@ -96,6 +96,11 @@ GRUPOS_MENU = [
     },
 ]
 
+
+# ============================================================
+# OPCIONES Y COMPATIBILIDAD
+# ============================================================
+
 OPCIONES_MENU = [
     opcion[0]
     for grupo in GRUPOS_MENU
@@ -121,58 +126,85 @@ ALIASES.update({
     "Proyectos públicos / MGA": "🇨🇴 Proyectos públicos / MGA",
     "Generador de propuestas": "📄 Generador de propuestas",
     "Biblioteca INTILED": "🏢 Biblioteca INTILED",
+    "Seguimiento": "📊 Seguimiento",
 })
 
 
+# ============================================================
+# CAMBIAR DE PÁGINA
+# ============================================================
+
 def cambiar_pagina(destino):
+
+    destino = ALIASES.get(destino, destino)
+
+    if destino not in OPCIONES_MENU:
+        return
+
     st.session_state["inti_menu_actual"] = destino
     st.session_state["menu_principal"] = destino
+
     st.rerun()
 
 
+# ============================================================
+# MOSTRAR MENÚ
+# ============================================================
+
 def mostrar_menu():
 
-    # Compatibilidad con redirecciones entre módulos
+    # Redirecciones solicitadas por otros módulos
     destino_pendiente = st.session_state.pop(
         "navegar_a",
         None
     )
 
     if destino_pendiente:
+
         destino = ALIASES.get(
             destino_pendiente,
             destino_pendiente
         )
+
         if destino in OPCIONES_MENU:
             st.session_state["inti_menu_actual"] = destino
 
-    # Compatibilidad con navegación anterior
+    # Recuperar navegación anterior
     if "inti_menu_actual" not in st.session_state:
+
         anterior = st.session_state.get(
             "menu_principal",
             "🏠 Dashboard"
         )
-        st.session_state["inti_menu_actual"] = (
-            ALIASES.get(anterior, "🏠 Dashboard")
+
+        st.session_state["inti_menu_actual"] = ALIASES.get(
+            anterior,
+            "🏠 Dashboard"
         )
 
     actual = st.session_state["inti_menu_actual"]
 
     if actual not in OPCIONES_MENU:
+
         actual = "🏠 Dashboard"
         st.session_state["inti_menu_actual"] = actual
 
     st.session_state["menu_principal"] = actual
 
+    # ========================================================
+    # BARRA LATERAL
+    # ========================================================
+
     with st.sidebar:
 
-        # Marca
         st.markdown(
             """
             <div class="inti-brand">
                 <div class="inti-brand-icon">⚡</div>
                 <div>
-                    <div class="inti-brand-name">INTI</div>
+                    <div class="inti-brand-name">
+                        INTI
+                    </div>
                     <div class="inti-brand-subtitle">
                         PROJECTS ENTERPRISE
                     </div>
@@ -187,7 +219,10 @@ def mostrar_menu():
             unsafe_allow_html=True
         )
 
-        # Navegación por grupos
+        # ====================================================
+        # GRUPOS DE NAVEGACIÓN
+        # ====================================================
+
         for grupo in GRUPOS_MENU:
 
             st.markdown(
@@ -201,24 +236,40 @@ def mostrar_menu():
 
                 seleccionado = destino == actual
 
-                # Identificador visual para CSS
                 marcador = (
                     "inti-nav-active"
                     if seleccionado
                     else "inti-nav-normal"
                 )
 
-                with st.container(key=marcador):
+                # CORRECCIÓN PRINCIPAL:
+                # Cada contenedor recibe una clave única.
+                indice = OPCIONES_MENU.index(destino)
 
-                    etiqueta = f"{icono}   {nombre}"
+                clave_contenedor = (
+                    f"{marcador}-{indice}"
+                )
+
+                with st.container(
+                    key=clave_contenedor
+                ):
+
+                    etiqueta = (
+                        f"{icono}   {nombre}"
+                    )
 
                     if st.button(
                         etiqueta,
-                        key="nav_" + destino,
+                        key=f"inti_nav_btn_{indice}",
                         use_container_width=True,
                         type="tertiary"
                     ):
+
                         cambiar_pagina(destino)
+
+        # ====================================================
+        # PIE DEL MENÚ
+        # ====================================================
 
         st.markdown(
             '<div class="inti-sidebar-divider"></div>',
@@ -232,7 +283,8 @@ def mostrar_menu():
                     INTILED SAS BIC
                 </div>
                 <div class="inti-version">
-                    Plataforma de inteligencia de proyectos
+                    Plataforma corporativa de
+                    inteligencia y gestión de proyectos
                 </div>
             </div>
             """,
@@ -240,3 +292,4 @@ def mostrar_menu():
         )
 
     return actual
+
