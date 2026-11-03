@@ -1,233 +1,242 @@
-import streamlit as st
 
+import streamlit as st
 
 # ============================================================
 # INTI PROJECTS AI
-# NAVEGACIÓN PRINCIPAL
+# NAVEGACIÓN CORPORATIVA
 # INTILED SAS BIC
 # ============================================================
 
-
-# ============================================================
-# OPCIONES DEL MENÚ
-# ============================================================
-
-OPCIONES_MENU = [
-
-    # --------------------------------------------------------
-    # INICIO
-    # --------------------------------------------------------
-
-    "🏠 Dashboard",
-
-    # --------------------------------------------------------
-    # OPORTUNIDADES
-    # --------------------------------------------------------
-
-    "🔎 Radar de oportunidades",
-    "🎯 Oportunidades",
-    "🧠 Análisis INTILED",
-    "📑 Analizador de documentos",
-
-    # --------------------------------------------------------
-    # GESTIÓN INTERNA DE PROYECTOS
-    # --------------------------------------------------------
-
-    "📊 Portafolio INTILED",
-    "📅 Reuniones y avances",
-
-    # --------------------------------------------------------
-    # ESTRUCTURACIÓN
-    # --------------------------------------------------------
-
-    "🏗️ Estructuración",
-    "🇨🇴 Proyectos públicos / MGA",
-
-    # --------------------------------------------------------
-    # INTELIGENCIA Y DOCUMENTACIÓN
-    # --------------------------------------------------------
-
-    "📚 Investigación",
-    "📄 Generador de propuestas",
-    "🏢 Biblioteca INTILED",
-
-    # --------------------------------------------------------
-    # SEGUIMIENTO
-    # --------------------------------------------------------
-
-    "📊 Seguimiento"
+GRUPOS_MENU = [
+    {
+        "titulo": "GENERAL",
+        "opciones": [
+            ("🏠 Dashboard", "Inicio", "⌂"),
+        ],
+    },
+    {
+        "titulo": "CONVOCATORIAS",
+        "opciones": [
+            (
+                "🔎 Radar de oportunidades",
+                "Radar de convocatorias",
+                "◎",
+            ),
+            (
+                "🎯 Oportunidades",
+                "Oportunidades",
+                "◈",
+            ),
+            (
+                "🧠 Análisis INTILED",
+                "Análisis de viabilidad",
+                "◇",
+            ),
+            (
+                "📑 Analizador de documentos",
+                "Análisis documental",
+                "▤",
+            ),
+        ],
+    },
+    {
+        "titulo": "PROYECTOS",
+        "opciones": [
+            (
+                "📊 Portafolio INTILED",
+                "Portafolio",
+                "▦",
+            ),
+            (
+                "📅 Reuniones y avances",
+                "Reuniones y avances",
+                "▣",
+            ),
+            (
+                "🏗️ Estructuración",
+                "Estructuración",
+                "▥",
+            ),
+            (
+                "🇨🇴 Proyectos públicos / MGA",
+                "Proyectos públicos / MGA",
+                "◉",
+            ),
+            (
+                "📄 Generador de propuestas",
+                "Generador de propuestas",
+                "▧",
+            ),
+        ],
+    },
+    {
+        "titulo": "INTELIGENCIA",
+        "opciones": [
+            (
+                "📚 Investigación",
+                "Investigación",
+                "◫",
+            ),
+            (
+                "🏢 Biblioteca INTILED",
+                "Biblioteca",
+                "▤",
+            ),
+        ],
+    },
+    {
+        "titulo": "GESTIÓN",
+        "opciones": [
+            (
+                "📊 Seguimiento",
+                "Seguimiento",
+                "◷",
+            ),
+        ],
+    },
 ]
 
+OPCIONES_MENU = [
+    opcion[0]
+    for grupo in GRUPOS_MENU
+    for opcion in grupo["opciones"]
+]
 
-# ============================================================
-# VALIDAR DESTINO
-# ============================================================
+ALIASES = {}
 
-def validar_destino(destino):
+for grupo in GRUPOS_MENU:
+    for destino, nombre, icono in grupo["opciones"]:
+        ALIASES[destino] = destino
+        ALIASES[nombre] = destino
 
-    if destino in OPCIONES_MENU:
-        return destino
+ALIASES.update({
+    "Dashboard": "🏠 Dashboard",
+    "Inicio": "🏠 Dashboard",
+    "Convocatorias": "🔎 Radar de oportunidades",
+    "Radar de oportunidades": "🔎 Radar de oportunidades",
+    "Análisis INTILED": "🧠 Análisis INTILED",
+    "Analizador de documentos": "📑 Analizador de documentos",
+    "Portafolio INTILED": "📊 Portafolio INTILED",
+    "Estructuración": "🏗️ Estructuración",
+    "Proyectos públicos / MGA": "🇨🇴 Proyectos públicos / MGA",
+    "Generador de propuestas": "📄 Generador de propuestas",
+    "Biblioteca INTILED": "🏢 Biblioteca INTILED",
+})
 
-    return "🏠 Dashboard"
 
-
-# ============================================================
-# NAVEGAR A UNA SECCIÓN
-# ============================================================
-
-def navegar_a(destino):
-
-    destino = validar_destino(
-        destino
-    )
-
-    st.session_state[
-        "navegar_a"
-    ] = destino
-
+def cambiar_pagina(destino):
+    st.session_state["inti_menu_actual"] = destino
+    st.session_state["menu_principal"] = destino
     st.rerun()
 
 
-# ============================================================
-# MOSTRAR MENÚ
-# ============================================================
-
 def mostrar_menu():
 
-    # ========================================================
-    # PROCESAR REDIRECCIÓN DESDE OTRO MÓDULO
-    # ========================================================
+    # Compatibilidad con redirecciones entre módulos
+    destino_pendiente = st.session_state.pop(
+        "navegar_a",
+        None
+    )
 
-    if "navegar_a" in st.session_state:
+    if destino_pendiente:
+        destino = ALIASES.get(
+            destino_pendiente,
+            destino_pendiente
+        )
+        if destino in OPCIONES_MENU:
+            st.session_state["inti_menu_actual"] = destino
 
-        destino = st.session_state.pop(
-            "navegar_a"
+    # Compatibilidad con navegación anterior
+    if "inti_menu_actual" not in st.session_state:
+        anterior = st.session_state.get(
+            "menu_principal",
+            "🏠 Dashboard"
+        )
+        st.session_state["inti_menu_actual"] = (
+            ALIASES.get(anterior, "🏠 Dashboard")
         )
 
-        destino = validar_destino(
-            destino
-        )
+    actual = st.session_state["inti_menu_actual"]
 
-        st.session_state[
-            "menu_principal"
-        ] = destino
+    if actual not in OPCIONES_MENU:
+        actual = "🏠 Dashboard"
+        st.session_state["inti_menu_actual"] = actual
 
-
-    # ========================================================
-    # OPCIÓN INICIAL
-    # ========================================================
-
-    if "menu_principal" not in st.session_state:
-
-        st.session_state[
-            "menu_principal"
-        ] = "🏠 Dashboard"
-
-
-    # ========================================================
-    # CORREGIR OPCIÓN INVÁLIDA
-    # ========================================================
-
-    if (
-        st.session_state[
-            "menu_principal"
-        ]
-        not in OPCIONES_MENU
-    ):
-
-        st.session_state[
-            "menu_principal"
-        ] = "🏠 Dashboard"
-
-
-    # ========================================================
-    # SIDEBAR
-    # ========================================================
+    st.session_state["menu_principal"] = actual
 
     with st.sidebar:
 
-        # ====================================================
-        # IDENTIDAD INTI
-        # ====================================================
+        # Marca
+        st.markdown(
+            """
+            <div class="inti-brand">
+                <div class="inti-brand-icon">⚡</div>
+                <div>
+                    <div class="inti-brand-name">INTI</div>
+                    <div class="inti-brand-subtitle">
+                        PROJECTS ENTERPRISE
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.markdown(
-            "## ⚡ INTI"
+            '<div class="inti-sidebar-divider"></div>',
+            unsafe_allow_html=True
         )
 
-        st.caption(
-            "Projects AI"
-        )
+        # Navegación por grupos
+        for grupo in GRUPOS_MENU:
 
-        st.divider()
-
-
-        # ====================================================
-        # NAVEGACIÓN
-        # ====================================================
-
-        opcion = st.radio(
-            "Navegación",
-            OPCIONES_MENU,
-            key="menu_principal",
-            label_visibility="collapsed"
-        )
-
-
-        # ====================================================
-        # INFORMACIÓN DE CONTEXTO
-        # ====================================================
-
-        st.divider()
-
-        st.caption(
-            "INTILED SAS BIC"
-        )
-
-        st.caption(
-            "INTI Projects AI"
-        )
-
-
-        # ====================================================
-        # INDICADOR DE MÓDULO PRIVADO
-        # ====================================================
-
-        if opcion in [
-            "📊 Portafolio INTILED",
-            "📅 Reuniones y avances"
-        ]:
-
-            st.divider()
-
-            st.caption(
-                "🔐 Información interna"
+            st.markdown(
+                '<div class="inti-menu-heading">'
+                + grupo["titulo"]
+                + '</div>',
+                unsafe_allow_html=True
             )
 
-            if st.session_state.get(
-                "portfolio_authenticated",
-                False
-            ):
+            for destino, nombre, icono in grupo["opciones"]:
 
-                usuario = (
-                    st.session_state.get(
-                        "portfolio_user",
-                        "Usuario"
-                    )
+                seleccionado = destino == actual
+
+                # Identificador visual para CSS
+                marcador = (
+                    "inti-nav-active"
+                    if seleccionado
+                    else "inti-nav-normal"
                 )
 
-                st.success(
-                    f"🔓 Sesión: {usuario}"
-                )
+                with st.container(key=marcador):
 
-            else:
+                    etiqueta = f"{icono}   {nombre}"
 
-                st.warning(
-                    "🔒 Acceso restringido"
-                )
+                    if st.button(
+                        etiqueta,
+                        key="nav_" + destino,
+                        use_container_width=True,
+                        type="tertiary"
+                    ):
+                        cambiar_pagina(destino)
 
+        st.markdown(
+            '<div class="inti-sidebar-divider"></div>',
+            unsafe_allow_html=True
+        )
 
-    # ========================================================
-    # RETORNAR OPCIÓN SELECCIONADA
-    # ========================================================
+        st.markdown(
+            """
+            <div class="inti-sidebar-footer">
+                <div class="inti-company">
+                    INTILED SAS BIC
+                </div>
+                <div class="inti-version">
+                    Plataforma de inteligencia de proyectos
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    return opcion
+    return actual
