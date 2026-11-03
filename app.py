@@ -6,6 +6,18 @@ import base64
 # ============================================================
 # INTI PROJECTS AI
 # PLATAFORMA CORPORATIVA INTILED SAS BIC
+# VERSIÓN ESTABLE DE NAVEGACIÓN
+# ============================================================
+
+st.set_page_config(
+    page_title="INTI Projects | INTILED",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# IMPORTACIÓN DE MÓDULOS
 # ============================================================
 
 from modules.navigation import mostrar_menu
@@ -24,47 +36,39 @@ from modules.tracking import mostrar_seguimiento
 
 
 # ============================================================
-# CONFIGURACIÓN PRINCIPAL
+# RUTAS
 # ============================================================
-
-st.set_page_config(
-    page_title="INTI Projects | INTILED",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
 
-COLOR_NARANJA = "#F47721"
-COLOR_OSCURO = "#202630"
-
 
 # ============================================================
-# CARGAR ESTILOS CORPORATIVOS
+# ESTILOS CORPORATIVOS
 # ============================================================
 
 def cargar_estilos():
 
     ruta_css = ASSETS_DIR / "styles.css"
 
-    if ruta_css.exists():
+    if not ruta_css.exists():
+        return
 
-        contenido_css = ruta_css.read_text(
+    try:
+
+        css = ruta_css.read_text(
             encoding="utf-8"
         )
 
         st.markdown(
-            f"<style>{contenido_css}</style>",
+            f"<style>{css}</style>",
             unsafe_allow_html=True
         )
 
-    else:
+    except Exception as error:
 
         st.warning(
-            "No se encontró assets/styles.css. "
-            "La aplicación utilizará los estilos básicos."
+            "No fue posible cargar los estilos corporativos."
         )
 
 
@@ -72,7 +76,7 @@ cargar_estilos()
 
 
 # ============================================================
-# LOGO CORPORATIVO
+# LOGO
 # ============================================================
 
 def obtener_logo_base64():
@@ -91,12 +95,11 @@ def obtener_logo_base64():
         ).decode("utf-8")
 
     except Exception:
-
         return None
 
 
 # ============================================================
-# ESTADO GENERAL
+# ESTADO INICIAL
 # ============================================================
 
 if "ingreso" not in st.session_state:
@@ -107,19 +110,19 @@ if "oportunidad_seleccionada" not in st.session_state:
 
 
 # ============================================================
-# PORTADA CORPORATIVA
+# PORTADA
 # ============================================================
 
 def mostrar_portada():
 
-    logo_base64 = obtener_logo_base64()
+    logo = obtener_logo_base64()
 
-    if logo_base64:
+    if logo:
 
         logo_html = (
             '<img class="inti-welcome-logo" '
             'src="data:image/png;base64,'
-            + logo_base64
+            + logo
             + '" alt="INTILED">'
         )
 
@@ -133,10 +136,6 @@ def mostrar_portada():
         """
         <style>
 
-        /* ==========================================
-           PORTADA CORPORATIVA
-           ========================================== */
-
         section[data-testid="stSidebar"] {
             display: none;
         }
@@ -145,21 +144,21 @@ def mostrar_portada():
             background: #111821;
         }
 
-        .block-container {
-            max-width: 1000px;
+        [data-testid="stMainBlockContainer"] {
+            max-width: 1050px;
             padding-top: 6vh;
         }
 
         .inti-welcome {
             position: relative;
             overflow: hidden;
-            min-height: 510px;
-            border-radius: 26px;
+            min-height: 500px;
+            border-radius: 24px;
             background:
                 radial-gradient(
                     circle at 80% 25%,
-                    rgba(244,119,33,0.20),
-                    transparent 38%
+                    rgba(244,119,33,.20),
+                    transparent 40%
                 ),
                 linear-gradient(
                     135deg,
@@ -167,10 +166,10 @@ def mostrar_portada():
                     #111821 65%,
                     #26313F 100%
                 );
-            border: 1px solid rgba(255,255,255,0.10);
-            padding: 64px 45px 38px;
+            border: 1px solid rgba(255,255,255,.10);
+            padding: 65px 40px 35px;
             text-align: center;
-            box-shadow: 0 22px 65px rgba(0,0,0,0.22);
+            box-shadow: 0 22px 65px rgba(0,0,0,.22);
         }
 
         .inti-welcome::before {
@@ -178,13 +177,13 @@ def mostrar_portada():
             position: absolute;
             width: 380px;
             height: 380px;
-            border: 1px solid rgba(244,119,33,0.18);
+            border: 1px solid rgba(244,119,33,.18);
             border-radius: 50%;
             top: -140px;
             right: -120px;
             box-shadow:
-                0 0 0 45px rgba(244,119,33,0.025),
-                0 0 0 95px rgba(244,119,33,0.018);
+                0 0 0 45px rgba(244,119,33,.025),
+                0 0 0 95px rgba(244,119,33,.018);
             animation: intiPulse 8s ease-in-out infinite;
             pointer-events: none;
         }
@@ -199,7 +198,7 @@ def mostrar_portada():
             background: linear-gradient(
                 90deg,
                 transparent,
-                rgba(244,119,33,0.65),
+                rgba(244,119,33,.65),
                 transparent
             );
             transform: rotate(-24deg);
@@ -224,7 +223,6 @@ def mostrar_portada():
         .inti-welcome-label {
             position: relative;
             z-index: 1;
-            display: inline-block;
             color: #FFAD72;
             font-size: 12px;
             font-weight: 700;
@@ -250,7 +248,7 @@ def mostrar_portada():
         .inti-welcome-description {
             position: relative;
             z-index: 1;
-            max-width: 620px;
+            max-width: 650px;
             margin: 22px auto 0;
             color: #CAD0D8;
             font-size: 17px;
@@ -264,7 +262,7 @@ def mostrar_portada():
             background: linear-gradient(
                 90deg,
                 transparent,
-                rgba(255,255,255,0.25),
+                rgba(255,255,255,.25),
                 transparent
             );
         }
@@ -278,7 +276,7 @@ def mostrar_portada():
         @keyframes intiPulse {
             0%, 100% {
                 transform: scale(1);
-                opacity: 0.55;
+                opacity: .55;
             }
             50% {
                 transform: scale(1.12);
@@ -288,12 +286,16 @@ def mostrar_portada():
 
         @keyframes intiEnergy {
             0%, 100% {
-                transform: translateX(-90px) rotate(-24deg);
-                opacity: 0.2;
+                transform:
+                    translateX(-90px)
+                    rotate(-24deg);
+                opacity: .2;
             }
             50% {
-                transform: translateX(180px) rotate(-24deg);
-                opacity: 0.8;
+                transform:
+                    translateX(180px)
+                    rotate(-24deg);
+                opacity: .8;
             }
         }
 
@@ -323,6 +325,7 @@ def mostrar_portada():
     st.markdown(
         f"""
         <div class="inti-welcome">
+
             {logo_html}
 
             <div class="inti-welcome-label">
@@ -344,6 +347,7 @@ def mostrar_portada():
             <div class="inti-welcome-footer">
                 INTILED SAS BIC · PLATAFORMA CORPORATIVA
             </div>
+
         </div>
         """,
         unsafe_allow_html=True
@@ -365,6 +369,7 @@ def mostrar_portada():
         ):
 
             st.session_state["ingreso"] = True
+
             st.rerun()
 
     st.markdown(
@@ -383,18 +388,14 @@ def mostrar_portada():
 
 
 # ============================================================
-# BARRA SUPERIOR
+# VOLVER A PORTADA
 # ============================================================
 
-def mostrar_barra_superior():
+def mostrar_opcion_salida():
 
     with st.sidebar:
 
         st.divider()
-
-        st.caption(
-            "INTILED SAS BIC"
-        )
 
         if st.button(
             "Volver a la portada",
@@ -403,11 +404,12 @@ def mostrar_barra_superior():
         ):
 
             st.session_state["ingreso"] = False
+
             st.rerun()
 
 
 # ============================================================
-# NAVEGACIÓN ENTRE MÓDULOS
+# RUTAS DE MÓDULOS
 # ============================================================
 
 def ejecutar_modulo(opcion):
@@ -448,12 +450,10 @@ def ejecutar_modulo(opcion):
             mostrar_biblioteca,
 
         "📊 Seguimiento":
-            mostrar_seguimiento
+            mostrar_seguimiento,
     }
 
-    # Módulo de reuniones: opcional mientras
-    # completamos el desarrollo.
-
+    # Módulo de reuniones opcional
     try:
 
         from modules.meetings import mostrar_reuniones
@@ -466,65 +466,7 @@ def ejecutar_modulo(opcion):
 
         pass
 
-    # Alias para mantener compatibilidad
-    # con los nombres actuales del menú.
-
-    alias = {
-
-        "Inicio":
-            "🏠 Dashboard",
-
-        "Dashboard":
-            "🏠 Dashboard",
-
-        "Radar de oportunidades":
-            "🔎 Radar de oportunidades",
-
-        "Convocatorias":
-            "🔎 Radar de oportunidades",
-
-        "Oportunidades":
-            "🎯 Oportunidades",
-
-        "Análisis INTILED":
-            "🧠 Análisis INTILED",
-
-        "Analizador de documentos":
-            "📑 Analizador de documentos",
-
-        "Portafolio INTILED":
-            "📊 Portafolio INTILED",
-
-        "Reuniones y avances":
-            "📅 Reuniones y avances",
-
-        "Estructuración":
-            "🏗️ Estructuración",
-
-        "Proyectos públicos / MGA":
-            "🇨🇴 Proyectos públicos / MGA",
-
-        "Investigación":
-            "📚 Investigación",
-
-        "Generador de propuestas":
-            "📄 Generador de propuestas",
-
-        "Biblioteca INTILED":
-            "🏢 Biblioteca INTILED",
-
-        "Seguimiento":
-            "📊 Seguimiento"
-    }
-
-    destino = alias.get(
-        opcion,
-        opcion
-    )
-
-    funcion = rutas.get(
-        destino
-    )
+    funcion = rutas.get(opcion)
 
     if funcion is None:
 
@@ -548,9 +490,7 @@ def ejecutar_modulo(opcion):
             "Ver detalles técnicos"
         ):
 
-            st.exception(
-                error
-            )
+            st.exception(error)
 
 
 # ============================================================
@@ -561,15 +501,13 @@ def ejecutar_aplicacion():
 
     opcion = mostrar_menu()
 
-    mostrar_barra_superior()
+    mostrar_opcion_salida()
 
-    ejecutar_modulo(
-        opcion
-    )
+    ejecutar_modulo(opcion)
 
 
 # ============================================================
-# EJECUCIÓN
+# MAIN
 # ============================================================
 
 def main():
@@ -587,5 +525,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
