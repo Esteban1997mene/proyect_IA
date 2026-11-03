@@ -1,144 +1,133 @@
 
 # modules/radar.py
 
+import html
+from datetime import date
+
 import streamlit as st
-import pandas as pd
 
 from services.radar_sources import (
-    consultar_colombia,
-    importar_ecuador,
-    opciones_territoriales,
-    filtrar_oportunidades,
+    CATEGORIAS,
+    PROVINCIAS_ECUADOR,
     SERCOP_URL,
+    consultar_colombia,
+    consultar_ecuador,
+    consultar_detalle_ecuador,
+    enriquecer_ecuador,
+    filtrar_oportunidades,
+    opciones_territoriales,
+    estado_vigencia,
 )
 
 from services.opportunity_classifier import (
     evaluar_oportunidad,
-    LINEAS_INTILED,
 )
 
 
-# ============================================================
-# DISEÑO CORPORATIVO
-# ============================================================
-
-def estilos_radar():
-    st.markdown(
-        """
-        <style>
-        .radar-hero {
-            background: linear-gradient(
-                115deg, #202630, #303A48
-            );
-            border-radius: 18px;
-            padding: 30px 34px;
-            margin-bottom: 25px;
-            border: 1px solid #3D4653;
-        }
-
-        .radar-eyebrow {
-            color: #FFAD72;
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 1.7px;
-            margin-bottom: 12px;
-        }
-
-        .radar-title {
-            color: #FFFFFF;
-            font-size: clamp(30px, 3vw, 39px);
-            font-weight: 800;
-            line-height: 1.2;
-            margin-bottom: 12px;
-        }
-
-        .radar-description {
-            color: #D2D9E3;
-            font-size: 16px;
-            line-height: 1.7;
-            max-width: 850px;
-        }
-
-        .radar-section {
-            font-size: 21px;
-            font-weight: 750;
-            color: #242C39;
-            margin: 28px 0 15px;
-        }
-
-        .radar-card {
-            background: #FFFFFF;
-            border: 1px solid #E5EAF0;
-            border-radius: 14px;
-            padding: 20px;
-            margin: 12px 0;
-        }
-
-        .radar-card-title {
-            color: #242C39;
-            font-size: 18px;
-            font-weight: 750;
-            line-height: 1.5;
-        }
-
-        .radar-meta {
-            color: #707A89;
-            font-size: 14px;
-            margin-top: 8px;
-            line-height: 1.7;
-        }
-
-        .radar-footer {
-            color: #7A8492;
-            font-size: 13px;
-            padding: 20px 0;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+def estilos():
+    st.markdown("""
+    <style>
+    .radar-hero {
+        background:linear-gradient(115deg,#202630,#303A48);
+        border-radius:18px;
+        padding:32px 35px;
+        margin-bottom:25px;
+        border:1px solid #3D4653;
+    }
+    .radar-eyebrow {
+        color:#FFAD72;
+        font-size:12px;
+        font-weight:800;
+        letter-spacing:1.6px;
+        margin-bottom:12px;
+    }
+    .radar-title {
+        color:#FFFFFF;
+        font-size:38px;
+        font-weight:800;
+        margin-bottom:12px;
+    }
+    .radar-description {
+        color:#D2D9E3;
+        font-size:16px;
+        line-height:1.7;
+        max-width:850px;
+    }
+    .radar-section {
+        font-size:21px;
+        font-weight:750;
+        color:#242C39;
+        margin:28px 0 15px;
+    }
+    .radar-table-wrap {
+        overflow-x:auto;
+        border:1px solid #E5EAF0;
+        border-radius:14px;
+        background:#FFFFFF;
+    }
+    .radar-table {
+        width:100%;
+        border-collapse:collapse;
+        font-size:14px;
+    }
+    .radar-table th {
+        background:#202630;
+        color:white;
+        padding:14px;
+        text-align:left;
+        white-space:nowrap;
+    }
+    .radar-table td {
+        padding:14px;
+        border-bottom:1px solid #E5EAF0;
+        vertical-align:top;
+        color:#242C39;
+    }
+    .radar-table tr:hover td {
+        background:#FFF6EE;
+    }
+    .radar-note {
+        font-size:13px;
+        color:#707A89;
+        line-height:1.7;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def encabezado():
-    st.markdown(
-        """
-        <div class="radar-hero">
-            <div class="radar-eyebrow">
-                INTILED SAS BIC · INTELIGENCIA COMERCIAL
-            </div>
-            <div class="radar-title">
-                Radar de oportunidades
-            </div>
-            <div class="radar-description">
-                Identifica oportunidades en Colombia y Ecuador,
-                explora los territorios de interés y recibe
-                una recomendación preliminar de participación
-                según las líneas de trabajo de INTILED.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("""
+    <div class="radar-hero">
+      <div class="radar-eyebrow">
+        INTILED SAS BIC · INTELIGENCIA COMERCIAL
+      </div>
+      <div class="radar-title">
+        Radar de oportunidades
+      </div>
+      <div class="radar-description">
+        Explora convocatorias de Colombia y Ecuador.
+        Selecciona el tipo de proyecto, filtra por
+        territorio y evalúa la pertinencia comercial
+        para INTILED.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
-# ============================================================
-# UTILIDADES
-# ============================================================
-
-def preparar_oportunidades(datos):
+def preparar(datos):
     resultado = []
 
     for item in datos:
         registro = dict(item)
-        registro["evaluacion"] = evaluar_oportunidad(
-            registro
+        registro["evaluacion"] = (
+            evaluar_oportunidad(registro)
         )
         resultado.append(registro)
 
     return resultado
 
 
-def formato_presupuesto(item):
+def presupuesto(item):
     valor = item.get("presupuesto")
 
     if valor is None:
@@ -146,108 +135,290 @@ def formato_presupuesto(item):
 
     moneda = item.get("moneda", "")
 
-    return f"{moneda} {valor:,.0f}"
+    try:
+        return f"{moneda} {float(valor):,.0f}"
+    except (ValueError, TypeError):
+        return "No informado"
 
 
-def opciones_decision():
-    return [
-        "Todas",
-        "Evaluar participación individual",
-        "Evaluar alianza",
-        "No participar",
-        "Pendiente de verificación",
-    ]
-
-
-def cargar_colombia():
-    with st.spinner("Consultando SECOP II..."):
-        datos, error = consultar_colombia(limite=1000)
-
-    if error:
-        st.error(error)
-        return
-
-    st.session_state["radar_colombia"] = (
-        preparar_oportunidades(datos)
-    )
-    st.session_state["radar_colombia_consultado"] = True
-
-
-def mostrar_detalle(item, indice):
-    evaluacion = item["evaluacion"]
-
-    with st.expander(
-        "Ver evaluación y detalles",
-        expanded=False
+def consultar(pais, categoria, busqueda, dias, anio):
+    with st.spinner(
+        f"Consultando oportunidades de {pais}..."
     ):
-        st.markdown("#### Información del proceso")
-
-        st.write(
-            f"**Entidad:** {item.get('entidad') or 'No informada'}"
-        )
-        st.write(
-            f"**Código:** {item.get('codigo') or 'No informado'}"
-        )
-        st.write(
-            f"**Estado registrado:** "
-            f"{item.get('estado') or 'No informado'}"
-        )
-        st.write(
-            f"**Fecha de cierre:** "
-            f"{item.get('fecha_cierre') or 'No informada'}"
-        )
-        st.write(
-            f"**Presupuesto:** {formato_presupuesto(item)}"
-        )
-
-        st.markdown("#### Evaluación preliminar INTILED")
-
-        st.write(
-            f"**Recomendación:** {evaluacion['decision']}"
-        )
-        st.write(
-            f"**Resultado técnico:** {evaluacion['nivel']}"
-        )
-        st.write(evaluacion["motivo"])
-
-        if evaluacion["lineas"]:
-            st.write(
-                "**Líneas relacionadas:** "
-                + ", ".join(evaluacion["lineas"])
+        if pais == "Colombia":
+            datos, error = consultar_colombia(
+                categoria=categoria,
+                busqueda=busqueda,
+                dias=dias,
+                limite=500,
+            )
+        else:
+            datos, error = consultar_ecuador(
+                categoria=categoria,
+                busqueda=busqueda,
+                anio=anio,
+                paginas=2,
             )
 
-        st.markdown("#### Verificaciones pendientes")
+    st.session_state["radar_resultados"] = (
+        preparar(datos)
+    )
 
-        for pendiente in evaluacion["pendientes"]:
-            st.markdown(f"- {pendiente}")
+    st.session_state["radar_error"] = error
 
-        st.caption(
-            "La evaluación no certifica el cumplimiento "
-            "de requisitos habilitantes. La ubicación "
-            "mostrada tampoco confirma por sí sola "
-            "el lugar de ejecución."
+    st.session_state["radar_consulta"] = {
+        "pais": pais,
+        "categoria": categoria,
+        "busqueda": busqueda,
+        "dias": dias,
+        "anio": anio,
+    }
+
+
+def tabla_resultados(datos):
+    columnas = [
+        ("titulo", "Objeto"),
+        ("entidad", "Entidad"),
+        ("region", "Departamento / provincia"),
+        ("localidad", "Municipio / cantón"),
+        ("fecha_cierre", "Cierre"),
+        ("recomendacion", "Recomendación"),
+    ]
+
+    encabezados = "".join(
+        f"<th>{html.escape(nombre)}</th>"
+        for _, nombre in columnas
+    )
+
+    filas = []
+
+    for item in datos:
+        valores = dict(item)
+        valores["recomendacion"] = (
+            item["evaluacion"]["decision"]
         )
 
-        descripcion = item.get("descripcion", "")
+        celdas = "".join(
+            "<td>"
+            + html.escape(
+                str(valores.get(clave) or "No informado")
+            )
+            + "</td>"
+            for clave, _ in columnas
+        )
 
-        if descripcion:
-            st.markdown("#### Descripción disponible")
-            st.write(descripcion[:5000])
+        filas.append(f"<tr>{celdas}</tr>")
+
+    contenido = "".join(filas)
+
+    st.markdown(
+        f"""
+        <div class="radar-table-wrap">
+          <table class="radar-table">
+            <thead><tr>{encabezados}</tr></thead>
+            <tbody>{contenido}</tbody>
+          </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def detalle_oportunidad(item, indice):
+    evaluacion = item["evaluacion"]
+
+    with st.container(border=True):
+        st.markdown(
+            f"### {item.get('titulo') or 'Sin título'}"
+        )
+
+        st.write(
+            "**Entidad:** "
+            + (
+                item.get("entidad")
+                or "No informada"
+            )
+        )
+
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            st.write(
+                "**Presupuesto:** "
+                + presupuesto(item)
+            )
+
+        with c2:
+            st.write(
+                "**Publicación:** "
+                + (
+                    item.get("fecha_publicacion")
+                    or "Sin dato"
+                )
+            )
+
+        with c3:
+            st.write(
+                "**Cierre:** "
+                + (
+                    item.get("fecha_cierre")
+                    or "Por verificar"
+                )
+            )
+
+        st.write(
+            "**Recomendación preliminar:** "
+            + evaluacion["decision"]
+        )
+
+        st.caption(evaluacion["motivo"])
+
+        with st.expander(
+            "Consultar evaluación completa"
+        ):
+            st.write(
+                "**País:** " + item["pais"]
+            )
+
+            st.write(
+                "**Departamento / provincia:** "
+                + item["region"]
+            )
+
+            st.write(
+                "**Municipio / cantón:** "
+                + item["localidad"]
+            )
+
+            st.write(
+                "**Tipo de ubicación:** "
+                + item.get(
+                    "tipo_ubicacion",
+                    "No determinada"
+                )
+            )
+
+            st.write(
+                "**Estado registrado:** "
+                + item.get(
+                    "estado",
+                    "No informado"
+                )
+            )
+
+            st.write(
+                "**Vigencia:** "
+                + estado_vigencia(item)
+            )
+
+            st.write(
+                "**Código:** "
+                + item.get(
+                    "codigo",
+                    "No informado"
+                )
+            )
+
+            st.write(
+                "**Fuente:** "
+                + item.get(
+                    "fuente",
+                    "No informada"
+                )
+            )
+
+            if item.get("categorias"):
+                st.write(
+                    "**Sectores:** "
+                    + ", ".join(
+                        item["categorias"]
+                    )
+                )
+
+            st.markdown(
+                "#### Verificaciones pendientes"
+            )
+
+            for pendiente in evaluacion[
+                "pendientes"
+            ]:
+                st.write("- " + pendiente)
+
+            if item.get("descripcion"):
+                st.markdown(
+                    "#### Descripción del proceso"
+                )
+                st.write(
+                    item["descripcion"][:5000]
+                )
+
+            st.caption(
+                "La recomendación no constituye "
+                "certificación de cumplimiento. "
+                "La ubicación de ejecución debe "
+                "confirmarse en los documentos."
+            )
+
+        # Detalle OCDS solo cuando se solicita.
+        if (
+            item["pais"] == "Ecuador"
+            and item.get("ocid")
+        ):
+            if st.button(
+                "Consultar detalle SERCOP",
+                key=f"detalle_sercop_{indice}",
+                use_container_width=True,
+            ):
+                with st.spinner(
+                    "Consultando registro oficial..."
+                ):
+                    detalle, error = (
+                        consultar_detalle_ecuador(
+                            item["ocid"]
+                        )
+                    )
+
+                if error:
+                    st.error(error)
+                else:
+                    enriquecido = enriquecer_ecuador(
+                        item, detalle
+                    )
+
+                    st.session_state[
+                        "radar_resultados"
+                    ] = [
+                        enriquecido
+                        if x.get("codigo")
+                        == item.get("codigo")
+                        else x
+                        for x in st.session_state[
+                            "radar_resultados"
+                        ]
+                    ]
+
+                    st.success(
+                        "Se recuperó el registro OCDS. "
+                        "Revisa los datos disponibles."
+                    )
+                    st.rerun()
 
         enlace = item.get("enlace", "")
 
-        if enlace.startswith(("https://", "http://")):
+        if enlace.startswith(
+            ("http://", "https://")
+        ):
             st.link_button(
-                "Consultar proceso en la fuente",
+                "Abrir documento o proceso",
                 enlace,
                 use_container_width=True,
             )
 
         if st.button(
             "Enviar a Análisis INTILED",
-            key=f"radar_analizar_{indice}",
             type="primary",
             use_container_width=True,
+            key=f"analizar_radar_{indice}",
         ):
             st.session_state[
                 "oportunidad_seleccionada"
@@ -256,338 +427,314 @@ def mostrar_detalle(item, indice):
             st.session_state["navegar_a"] = (
                 "🧠 Análisis INTILED"
             )
-
             st.rerun()
 
 
-# ============================================================
-# INTERFAZ PRINCIPAL
-# ============================================================
-
 def mostrar_radar():
-    estilos_radar()
+    estilos()
     encabezado()
 
-    if "radar_colombia" not in st.session_state:
-        st.session_state["radar_colombia"] = []
+    if "radar_resultados" not in st.session_state:
+        st.session_state["radar_resultados"] = []
 
-    if "radar_colombia_consultado" not in st.session_state:
-        st.session_state["radar_colombia_consultado"] = False
+    if "radar_error" not in st.session_state:
+        st.session_state["radar_error"] = None
+
+    if "radar_consulta" not in st.session_state:
+        st.session_state["radar_consulta"] = None
 
     st.markdown(
-        '<div class="radar-section">01. Cobertura geográfica</div>',
-        unsafe_allow_html=True
+        '<div class="radar-section">'
+        '01. Configurar búsqueda</div>',
+        unsafe_allow_html=True,
     )
 
-    col_pais, col_fuente = st.columns([1, 2])
+    pais = st.selectbox(
+        "País",
+        ["Colombia", "Ecuador"],
+        key="radar_pais_v2",
+    )
 
-    with col_pais:
-        pais = st.selectbox(
-            "País",
-            ["Colombia", "Ecuador"],
-            key="radar_pais",
-        )
+    categoria = st.selectbox(
+        "Tipo de proyecto",
+        ["Todas"] + list(CATEGORIAS.keys()),
+        key="radar_categoria_v2",
+        help=(
+            "Selecciona la línea comercial "
+            "que deseas consultar."
+        ),
+    )
 
-    with col_fuente:
+    busqueda = st.text_input(
+        "Palabra clave adicional (opcional)",
+        placeholder=(
+            "Ej. luminarias solares, "
+            "interventoría, subestación..."
+        ),
+        key="radar_busqueda_v2",
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
         if pais == "Colombia":
-            st.info(
-                "Fuente: datos abiertos de SECOP II. "
-                "La consulta inicial recupera una muestra "
-                "de registros y no constituye una búsqueda "
-                "exhaustiva de todas las convocatorias."
+            dias = st.selectbox(
+                "Publicados en los últimos",
+                [30, 90, 180, 365],
+                index=2,
+                format_func=lambda x: (
+                    f"{x} días"
+                ),
+                key="radar_dias_v2",
             )
+            anio = date.today().year
         else:
-            st.info(
-                "Fuente: SERCOP. Para esta primera versión "
-                "se requiere importar un archivo CSV "
-                "obtenido de una fuente oficial."
+            dias = 180
+            anio = st.selectbox(
+                "Año de contratación",
+                list(
+                    range(
+                        date.today().year,
+                        2014,
+                        -1
+                    )
+                ),
+                key="radar_anio_v2",
             )
 
-    # --------------------------------------------------------
-    # OBTENCIÓN DE DATOS
-    # --------------------------------------------------------
-
-    if pais == "Colombia":
-
-        if st.button(
-            "Consultar oportunidades de Colombia",
-            type="primary",
-            key="radar_consultar_colombia",
-        ):
-            cargar_colombia()
-
-        oportunidades = st.session_state[
-            "radar_colombia"
-        ]
-
-        if not st.session_state[
-            "radar_colombia_consultado"
-        ]:
-            st.caption(
-                "Presiona Consultar para cargar los registros."
-            )
-
-    else:
-        st.link_button(
-            "Abrir portal oficial SERCOP",
-            SERCOP_URL,
+    with col2:
+        st.caption(
+            "Colombia: SECOP II. "
+            "Ecuador: API oficial SERCOP OCDS."
         )
 
-        archivo = st.file_uploader(
-            "Importar oportunidades de Ecuador",
-            type=["csv"],
-            key="radar_archivo_ecuador",
-            help=(
-                "Carga un CSV obtenido de una fuente "
-                "oficial de contratación pública."
-            ),
+    if st.button(
+        "Buscar oportunidades",
+        type="primary",
+        use_container_width=True,
+        key="radar_buscar_v2",
+    ):
+        consultar(
+            pais,
+            categoria,
+            busqueda,
+            dias,
+            anio,
         )
 
-        if archivo is not None:
-            datos, error = importar_ecuador(archivo)
+    consulta = st.session_state[
+        "radar_consulta"
+    ]
 
-            if error:
-                st.error(error)
-                oportunidades = []
-            else:
-                oportunidades = preparar_oportunidades(datos)
-                st.success(
-                    f"Se importaron {len(oportunidades)} registros."
-                )
-        else:
-            oportunidades = []
+    if consulta is None:
+        st.info(
+            "Selecciona el país y el tipo "
+            "de proyecto, luego presiona Buscar."
+        )
+        return
 
-    # --------------------------------------------------------
-    # FILTROS TERRITORIALES
-    # --------------------------------------------------------
+    if consulta["pais"] != pais:
+        st.info(
+            "Cambiaste de país. Presiona Buscar "
+            "para consultar la nueva fuente."
+        )
+        return
+
+    if (
+        consulta["categoria"] != categoria
+        or consulta["busqueda"] != busqueda
+        or consulta["dias"] != dias
+        or consulta["anio"] != anio
+    ):
+        st.warning(
+            "Los criterios cambiaron. Presiona "
+            "Buscar para actualizar los resultados."
+        )
+        return
+
+    error = st.session_state["radar_error"]
+
+    if error:
+        st.warning(error)
+
+    datos = st.session_state[
+        "radar_resultados"
+    ]
 
     st.markdown(
-        '<div class="radar-section">02. Filtros de búsqueda</div>',
-        unsafe_allow_html=True
+        '<div class="radar-section">'
+        '02. Ubicación territorial</div>',
+        unsafe_allow_html=True,
     )
 
     regiones = opciones_territoriales(
-        oportunidades, "region"
+        datos, "region"
     )
 
-    col_region, col_localidad = st.columns(2)
+    col_region, col_localidad = (
+        st.columns(2)
+    )
 
     with col_region:
         region = st.selectbox(
-            "Departamento"
-            if pais == "Colombia"
-            else "Provincia",
+            (
+                "Departamento"
+                if pais == "Colombia"
+                else "Provincia"
+            ),
             regiones,
-            key=f"radar_region_{pais}",
+            key=f"region_radar_v2_{pais}",
         )
 
-    oportunidades_region = [
-        item for item in oportunidades
+    datos_region = [
+        item for item in datos
         if region == "Todas"
         or item["region"] == region
     ]
 
     localidades = opciones_territoriales(
-        oportunidades_region, "localidad"
+        datos_region,
+        "localidad",
     )
 
     with col_localidad:
         localidad = st.selectbox(
-            "Municipio"
-            if pais == "Colombia"
-            else "Cantón / ciudad",
-            localidades,
-            key=f"radar_localidad_{pais}_{region}",
-        )
-
-    col_busqueda, col_decision = st.columns([2, 1])
-
-    with col_busqueda:
-        busqueda = st.text_input(
-            "Buscar por objeto, entidad o código",
-            placeholder=(
-                "Ej. alumbrado público, energía solar, "
-                "interventoría..."
+            (
+                "Municipio"
+                if pais == "Colombia"
+                else "Cantón / ciudad"
             ),
-            key="radar_busqueda",
+            localidades,
+            key=(
+                f"localidad_radar_v2_"
+                f"{pais}_{region}"
+            ),
         )
 
-    with col_decision:
-        decision = st.selectbox(
-            "Ruta de participación",
-            opciones_decision(),
-            key="radar_filtro_decision",
-        )
+    decisiones = [
+        "Todas",
+        "Evaluar participación individual",
+        "Evaluar alianza",
+        "No participar",
+        "Pendiente de verificación",
+    ]
 
-    # --------------------------------------------------------
-    # RESULTADOS
-    # --------------------------------------------------------
+    decision = st.selectbox(
+        "Ruta de participación",
+        decisiones,
+        key="decision_radar_v2",
+    )
 
     filtradas = filtrar_oportunidades(
-        oportunidades,
-        texto=busqueda,
+        datos,
         region=region,
         localidad=localidad,
         decision=decision,
     )
 
     st.markdown(
-        '<div class="radar-section">03. Resultados</div>',
-        unsafe_allow_html=True
+        '<div class="radar-section">'
+        '03. Resumen de resultados</div>',
+        unsafe_allow_html=True,
     )
 
-    individual = sum(
-        1 for item in filtradas
-        if item["evaluacion"]["decision"]
+    individuales = sum(
+        x["evaluacion"]["decision"]
         == "Evaluar participación individual"
+        for x in filtradas
     )
 
-    alianza = sum(
-        1 for item in filtradas
-        if item["evaluacion"]["decision"]
+    alianzas = sum(
+        x["evaluacion"]["decision"]
         == "Evaluar alianza"
-    )
-
-    descartadas = sum(
-        1 for item in filtradas
-        if item["evaluacion"]["decision"]
-        == "No participar"
+        for x in filtradas
     )
 
     pendientes = sum(
-        1 for item in filtradas
-        if item["evaluacion"]["decision"]
+        x["evaluacion"]["decision"]
         == "Pendiente de verificación"
+        for x in filtradas
     )
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Resultados", len(filtradas))
-    c2.metric("Evaluar individual", individual)
-    c3.metric("Evaluar alianza", alianza)
-    c4.metric("Pendientes / descartadas", pendientes + descartadas)
+    c1.metric(
+        "Oportunidades", len(filtradas)
+    )
+    c2.metric(
+        "Evaluar individual", individuales
+    )
+    c3.metric(
+        "Evaluar alianza", alianzas
+    )
+    c4.metric(
+        "Pendientes", pendientes
+    )
 
     if not filtradas:
         st.info(
-            "No hay resultados para los filtros actuales. "
-            "Comprueba la fuente de datos o amplía la búsqueda."
+            "No se encontraron registros con "
+            "los criterios actuales. Esto no "
+            "demuestra que no existan procesos."
         )
         return
 
     st.caption(
-        "Las recomendaciones se basan en afinidad temática. "
-        "No equivalen a una revisión de pliegos ni confirman "
-        "que los procesos sigan abiertos."
+        "Resultados obtenidos de la fuente "
+        "consultada. Su vigencia y habilitantes "
+        "deben comprobarse antes de postular."
     )
-
-    # --------------------------------------------------------
-    # TABLA EJECUTIVA
-    # --------------------------------------------------------
-
-    filas = []
-
-    for item in filtradas:
-        filas.append({
-            "Objeto": item["titulo"],
-            "Entidad": item["entidad"],
-            "Territorio": (
-                f"{item['region']} / {item['localidad']}"
-            ),
-            "Cierre": item["fecha_cierre"] or "Sin dato",
-            "Presupuesto": formato_presupuesto(item),
-            "Recomendación": (
-                item["evaluacion"]["decision"]
-            ),
-        })
-
-    st.dataframe(
-        pd.DataFrame(filas),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    # --------------------------------------------------------
-    # FICHAS
-    # --------------------------------------------------------
 
     st.markdown(
-        '<div class="radar-section">04. Evaluación de oportunidades</div>',
-        unsafe_allow_html=True
+        '<div class="radar-section">'
+        '04. Oportunidades identificadas</div>',
+        unsafe_allow_html=True,
     )
 
     maximo = st.selectbox(
         "Resultados por página",
-        [5, 10, 20, 50],
+        [5, 10, 20],
         index=1,
-        key="radar_por_pagina",
+        key="radar_limite_v2",
     )
 
     paginas = max(
-        1, (len(filtradas) + maximo - 1) // maximo
+        1,
+        (len(filtradas) + maximo - 1)
+        // maximo
     )
 
-    pagina = st.number_input(
+    pagina = st.selectbox(
         "Página",
-        min_value=1,
-        max_value=paginas,
-        value=1,
-        key=f"radar_pagina_{pais}_{region}_{localidad}_{decision}_{len(filtradas)}",
+        list(range(1, paginas + 1)),
+        key=(
+            f"pagina_radar_v2_"
+            f"{pais}_{len(filtradas)}"
+        ),
     )
 
     inicio = (pagina - 1) * maximo
-    fin = inicio + maximo
+    visibles = filtradas[
+        inicio:inicio + maximo
+    ]
 
-    for indice, item in enumerate(
-        filtradas[inicio:fin],
-        start=inicio,
-    ):
-        with st.container(border=True):
-            st.markdown(
-                f"### {item['titulo']}"
-            )
-
-            st.write(
-                f"**Entidad:** "
-                f"{item['entidad'] or 'No informada'}"
-            )
-
-            st.write(
-                f"**Ubicación registrada:** "
-                f"{item['region']} / {item['localidad']}"
-            )
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.write(
-                    f"**Presupuesto:** "
-                    f"{formato_presupuesto(item)}"
-                )
-
-            with col2:
-                st.write(
-                    f"**Cierre:** "
-                    f"{item['fecha_cierre'] or 'No informado'}"
-                )
-
-            st.write(
-                "**Recomendación preliminar:** "
-                + item["evaluacion"]["decision"]
-            )
-
-            st.caption(
-                item["evaluacion"]["motivo"]
-            )
-
-            mostrar_detalle(item, indice)
+    tabla_resultados(visibles)
 
     st.markdown(
-        """
-        <div class="radar-footer">
-            INTILED SAS BIC · INTI Projects Enterprise<br>
-            Información sujeta a verificación en las
-            fuentes oficiales y documentos del proceso.
-        </div>
-        """,
-        unsafe_allow_html=True
+        '<div class="radar-section">'
+        '05. Evaluación individual</div>',
+        unsafe_allow_html=True,
+    )
+
+    for indice, item in enumerate(
+        visibles, start=inicio
+    ):
+        detalle_oportunidad(
+            item, indice
+        )
+
+    st.caption(
+        "INTI Projects Enterprise · "
+        "INTILED SAS BIC. "
+        "Evaluación comercial preliminar."
     )
