@@ -1,14 +1,12 @@
 
-# services/radar_sources.py
-
 import io
 import os
 import re
 import unicodedata
-from datetime import datetime
 
 import pandas as pd
 import requests
+
 
 SECOP_DATASET = os.getenv(
     "INTI_SECOP_DATASET",
@@ -23,6 +21,7 @@ SECOP_URL = (
 SERCOP_URL = (
     "https://portal.compraspublicas.gob.ec/sercop/"
 )
+
 
 CAMPOS = {
     "titulo": [
@@ -50,7 +49,6 @@ CAMPOS = {
         "buyer_name",
         "comprador",
         "institucion",
-        "institucion_contratante",
     ],
     "departamento": [
         "departamento_entidad",
@@ -72,7 +70,6 @@ CAMPOS = {
         "canton",
         "cant_n",
         "ciudad",
-        "municipio",
     ],
     "presupuesto": [
         "precio_base",
@@ -115,85 +112,125 @@ CAMPOS = {
 
 
 def clave(texto):
+
     texto = str(texto or "").lower().strip()
     texto = unicodedata.normalize("NFKD", texto)
+
     texto = "".join(
-        c for c in texto
-        if not unicodedata.combining(c)
+        caracter
+        for caracter in texto
+        if not unicodedata.combining(caracter)
     )
-    texto = re.sub(r"[^a-z0-9]+", "_", texto)
+
+    texto = re.sub(
+        r"[^a-z0-9]+",
+        "_",
+        texto
+    )
+
     return texto.strip("_")
 
 
 def valor_campo(fila, nombre):
+
     for alternativa in CAMPOS.get(nombre, []):
+
         llave = clave(alternativa)
         valor = fila.get(llave)
+
         if valor is not None and str(valor).strip():
             return str(valor).strip()
+
     return ""
 
 
 def convertir_numero(valor):
+
     texto = str(valor or "").strip()
+
     if not texto:
         return None
 
-    texto = re.sub(r"[^\d,.-]", "", texto)
+    texto = re.sub(
+        r"[^\d,.-]",
+        "",
+        texto
+    )
+
     if not texto:
         return None
 
     try:
+
         if "," in texto and "." in texto:
+
             if texto.rfind(",") > texto.rfind("."):
-                texto = texto.replace(".", "").replace(",", ".")
+                texto = texto.replace(".", "")
+                texto = texto.replace(",", ".")
             else:
                 texto = texto.replace(",", "")
+
         elif "," in texto:
+
             partes = texto.split(",")
+
             if len(partes[-1]) == 3:
                 texto = texto.replace(",", "")
             else:
                 texto = texto.replace(",", ".")
+
         elif texto.count(".") > 1:
             texto = texto.replace(".", "")
+
         return float(texto)
+
     except ValueError:
         return None
 
 
 def convertir_fecha(valor):
+
     if not valor:
         return None
 
     try:
+
         fecha = pd.to_datetime(
-            valor, errors="coerce", utc=True
+            valor,
+            errors="coerce",
+            utc=True
         )
+
         if pd.isna(fecha):
             return None
+
         return fecha.strftime("%Y-%m-%d")
+
     except Exception:
         return None
 
 
 def normalizar_registro(registro, pais):
+
     fila = {
         clave(k): v
         for k, v in registro.items()
     }
 
-    region = (
-        valor_campo(fila, "departamento")
-        if pais == "Colombia"
-        else valor_campo(fila, "provincia")
-    )
-
-    localidad = (
-        valor_campo(fila, "municipio")
-        if pais == "Colombia"
-        else valor_campo(fila, "canton")
-    )
+    if pais == "Colombia":
+        region = valor_campo(
+            fila, "departamento"
+        )
+        localidad = valor_campo(
+            fila, "municipio"
+        )
+    else:
+        region = valor_campo(
+            fila, "provincia"
+        )
+        localidad = valor_campo(
+            fila, "canton"
+        )
 
     return {
         "pais": pais,
@@ -205,7 +242,11 @@ def normalizar_registro(registro, pais):
         "presupuesto": convertir_numero(
             valor_campo(fila, "presupuesto")
         ),
-        "moneda": "COP" if pais == "Colombia" else "USD",
+        "moneda": (
+            "COP"
+            if pais == "Colombia"
+            else "USD"
+        ),
         "fecha_cierre": convertir_fecha(
             valor_campo(fila, "fecha_cierre")
         ),
@@ -222,15 +263,15 @@ def normalizar_registro(registro, pais):
 
 
 def consultar_colombia(limite=500):
-    """
-    Consulta una muestra de registros SECOP II.
-    No equivale a un barrido exhaustivo de procesos.
-    """
+
     try:
+
         respuesta = requests.get(
             SECOP_URL,
             params={
-                "$limit": min(int(limite), 2000),
+                "$limit": min(
+                    int(limite), 2000
+                )
             },
             timeout=30,
             headers={
@@ -238,42 +279,49 @@ def consultar_colombia(limite=500):
                 "User-Agent": "INTI-Projects/1.0",
             },
         )
+
         respuesta.raise_for_status()
         datos = respuesta.json()
 
         if not isinstance(datos, list):
-            return [], "La fuente no devolvió una lista válida."
+            return [], (
+                "La fuente no devolvió "
+                "una lista válida."
+            )
 
         oportunidades = [
-            normalizar_registro(item, "Colombia")
+            normalizar_registro(
+                item, "Colombia"
+            )
             for item in datos
             if isinstance(item, dict)
         ]
 
         oportunidades = [
-            item for item in oportunidades
+            item
+            for item in oportunidades
             if item["titulo"]
         ]
 
         return oportunidades, None
 
     except requests.RequestException as error:
+
         return [], (
-            "No fue posible consultar SECOP II: "
-            f"{error}"
+            "No fue posible consultar "
+            f"SECOP II: {error}"
         )
+
     except (ValueError, TypeError) as error:
+
         return [], (
-            "La respuesta de SECOP II no pudo interpretarse: "
-            f"{error}"
+            "La respuesta de SECOP II "
+            f"no pudo interpretarse: {error}"
         )
 
 
 def importar_ecuador(archivo):
-    """
-    Lee un CSV exportado desde una fuente oficial.
-    El usuario debe comprobar el origen del archivo.
-    """
+
     if archivo is None:
         return [], None
 
@@ -282,8 +330,13 @@ def importar_ecuador(archivo):
     dataframe = None
     ultimo_error = None
 
-    for codificacion in ("utf-8-sig", "latin-1"):
+    for codificacion in (
+        "utf-8-sig",
+        "latin-1"
+    ):
+
         try:
+
             dataframe = pd.read_csv(
                 io.BytesIO(contenido),
                 encoding=codificacion,
@@ -291,41 +344,56 @@ def importar_ecuador(archivo):
                 engine="python",
                 dtype=str,
             )
+
             break
+
         except Exception as error:
             ultimo_error = error
 
     if dataframe is None:
-        return [], f"No se pudo leer el CSV: {ultimo_error}"
+        return [], (
+            "No se pudo leer el CSV: "
+            f"{ultimo_error}"
+        )
 
-    registros = dataframe.fillna("").to_dict("records")
+    registros = (
+        dataframe.fillna("")
+        .to_dict("records")
+    )
 
     oportunidades = [
-        normalizar_registro(item, "Ecuador")
+        normalizar_registro(
+            item, "Ecuador"
+        )
         for item in registros
     ]
 
     oportunidades = [
-        item for item in oportunidades
+        item
+        for item in oportunidades
         if item["titulo"]
     ]
 
     if not oportunidades:
         return [], (
-            "El archivo no contiene una columna de objeto "
-            "o título reconocida. Revise sus encabezados."
+            "El archivo no contiene "
+            "un título u objeto reconocible."
         )
 
     return oportunidades, None
 
 
-def opciones_territoriales(oportunidades, campo):
+def opciones_territoriales(
+    oportunidades, campo
+):
+
     valores = sorted({
         str(item.get(campo, "")).strip()
         for item in oportunidades
         if str(item.get(campo, "")).strip()
         and item.get(campo) != "Sin determinar"
     })
+
     return ["Todas"] + valores
 
 
@@ -336,18 +404,32 @@ def filtrar_oportunidades(
     localidad="Todas",
     decision="Todas",
 ):
+
     texto = str(texto).strip().lower()
+
     resultado = []
 
     for item in oportunidades:
-        if region != "Todas" and item["region"] != region:
+
+        if (
+            region != "Todas"
+            and item["region"] != region
+        ):
             continue
 
-        if localidad != "Todas" and item["localidad"] != localidad:
+        if (
+            localidad != "Todas"
+            and item["localidad"] != localidad
+        ):
             continue
 
         if decision != "Todas":
-            if item.get("evaluacion", {}).get("decision") != decision:
+
+            evaluacion = item.get(
+                "evaluacion", {}
+            )
+
+            if evaluacion.get("decision") != decision:
                 continue
 
         contenido = " ".join([
