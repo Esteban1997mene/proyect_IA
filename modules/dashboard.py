@@ -519,4 +519,3 @@ def mostrar_dashboard():
     st.caption(
         "INTI Projects Enterprise · INTILED SAS BIC"
     )
-
