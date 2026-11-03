@@ -1,0 +1,216 @@
+
+/* ==========================================
+   INTI PROJECTS AI
+   DISEÑO CORPORATIVO GLOBAL
+   ========================================== */
+
+:root {
+    --inti-orange: #F47721;
+    --inti-orange-hover: #E66512;
+    --inti-dark: #202630;
+    --inti-dark-soft: #303744;
+    --inti-bg: #F4F6F8;
+    --inti-white: #FFFFFF;
+    --inti-text: #242B36;
+    --inti-muted: #6B7280;
+    --inti-border: #E5E7EB;
+    --inti-radius: 14px;
+}
+
+/* Fondo general */
+
+.stApp {
+    background: var(--inti-bg);
+    color: var(--inti-text);
+}
+
+/* Contenedor principal */
+
+.block-container {
+    max-width: 1550px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+/* Barra lateral */
+
+section[data-testid="stSidebar"] {
+    background: var(--inti-dark);
+}
+
+section[data-testid="stSidebar"] * {
+    color: #F3F4F6;
+}
+
+section[data-testid="stSidebar"] hr {
+    border-color: #444B55;
+}
+
+/* Menú lateral */
+
+section[data-testid="stSidebar"]
+div[role="radiogroup"] label {
+    border-radius: 10px;
+    padding: 9px 12px;
+    transition: background 0.2s ease,
+                transform 0.2s ease;
+}
+
+section[data-testid="stSidebar"]
+div[role="radiogroup"] label:hover {
+    background: var(--inti-dark-soft);
+    transform: translateX(3px);
+}
+
+section[data-testid="stSidebar"]
+div[role="radiogroup"]
+label:has(input:checked) {
+    background: rgba(244,119,33,0.18);
+    border-left: 3px solid var(--inti-orange);
+}
+
+/* Títulos */
+
+h1, h2, h3 {
+    color: var(--inti-text);
+    letter-spacing: -0.4px;
+}
+
+h1 {
+    font-weight: 750;
+}
+
+h2 {
+    font-weight: 700;
+}
+
+/* Botones */
+
+.stButton > button,
+.stFormSubmitButton > button {
+    border-radius: 10px;
+    font-weight: 650;
+    padding: 0.65rem 1.1rem;
+    transition: transform 0.18s ease,
+                box-shadow 0.18s ease,
+                background 0.18s ease;
+}
+
+.stButton > button:hover,
+.stFormSubmitButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.12);
+}
+
+button[kind="primary"] {
+    background: var(--inti-orange);
+    border-color: var(--inti-orange);
+    color: white;
+}
+
+button[kind="primary"]:hover {
+    background: var(--inti-orange-hover);
+    border-color: var(--inti-orange-hover);
+    color: white;
+}
+
+/* Tarjetas y contenedores */
+
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: var(--inti-radius);
+}
+
+/* Métricas */
+
+div[data-testid="stMetric"] {
+    background: white;
+    border: 1px solid var(--inti-border);
+    border-radius: var(--inti-radius);
+    padding: 16px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.035);
+}
+
+div[data-testid="stMetricValue"] {
+    font-weight: 750;
+}
+
+/* Tablas */
+
+div[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* Formularios */
+
+div[data-testid="stForm"] {
+    background: white;
+    border: 1px solid var(--inti-border);
+    border-radius: 14px;
+    padding: 20px;
+}
+
+/* Pestañas */
+
+button[data-baseweb="tab"] {
+    border-radius: 8px 8px 0 0;
+    font-weight: 600;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: var(--inti-orange);
+}
+
+/* Campos */
+
+input, textarea {
+    border-radius: 9px;
+}
+
+/* Ocultar elementos decorativos */
+
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+/* Animación de entrada */
+
+@keyframes intiFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.block-container {
+    animation: intiFadeIn 0.35s ease-out;
+}
+
+/* Accesibilidad */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Adaptación móvil */
+
+@media (max-width: 768px) {
+    .block-container {
+        padding: 1rem;
+    }
+
+    div[data-testid="stMetric"] {
+        padding: 10px;
+    }
+}
