@@ -1,188 +1,500 @@
 
-/* ==========================================
-   INTI PROJECTS AI
-   DISEÑO CORPORATIVO GLOBAL
-   ========================================== */
+/* ==========================================================
+   INTI PROJECTS ENTERPRISE
+   SISTEMA VISUAL CORPORATIVO
+   INTILED SAS BIC
+   ========================================================== */
 
 :root {
     --inti-orange: #F47721;
-    --inti-orange-hover: #E66512;
+    --inti-orange-hover: #E56712;
+    --inti-orange-light: #FFF1E5;
+
     --inti-dark: #202630;
-    --inti-dark-soft: #303744;
-    --inti-bg: #F4F6F8;
-    --inti-white: #FFFFFF;
-    --inti-text: #242B36;
-    --inti-muted: #6B7280;
-    --inti-border: #E5E7EB;
+    --inti-sidebar: #1C2430;
+    --inti-sidebar-hover: #303A48;
+
+    --inti-bg: #F5F7FA;
+    --inti-card: #FFFFFF;
+    --inti-text: #242C39;
+    --inti-muted: #707A89;
+    --inti-border: #E6EAF0;
+
+    --inti-success: #16866B;
+    --inti-danger: #C94444;
+
     --inti-radius: 14px;
+    --inti-shadow: 0 4px 18px rgba(23,32,46,.045);
 }
 
-/* Fondo general */
+/* ==========================================================
+   APLICACIÓN
+   ========================================================== */
 
 .stApp {
     background: var(--inti-bg);
     color: var(--inti-text);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
 }
 
-/* Contenedor principal */
-
-.block-container {
-    max-width: 1550px;
-    padding-top: 2rem;
-    padding-bottom: 3rem;
+[data-testid="stAppViewContainer"] {
+    background: var(--inti-bg);
 }
 
-/* Barra lateral */
+.main .block-container,
+[data-testid="stMainBlockContainer"] {
+    max-width: 1500px;
+    padding-top: 2.1rem;
+    padding-bottom: 4rem;
+}
+
+/* ==========================================================
+   BARRA LATERAL
+   ========================================================== */
+
+section[data-testid="stSidebar"],
+[data-testid="stSidebarContent"] {
+    background: var(--inti-sidebar) !important;
+}
 
 section[data-testid="stSidebar"] {
-    background: var(--inti-dark);
+    border-right: 1px solid #35404E;
 }
 
-section[data-testid="stSidebar"] * {
-    color: #F3F4F6;
+section[data-testid="stSidebar"] .block-container {
+    padding-top: 1.4rem;
 }
 
-section[data-testid="stSidebar"] hr {
-    border-color: #444B55;
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+    color: #D9DFE8;
 }
 
-/* Menú lateral */
+/* Marca corporativa */
+
+.inti-brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 14px 8px 17px;
+}
+
+.inti-brand-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 47px;
+    height: 47px;
+    flex-shrink: 0;
+    border-radius: 13px;
+    background: linear-gradient(135deg, #FF9B48, #F47721);
+    color: #FFFFFF;
+    font-size: 24px;
+    box-shadow: 0 5px 18px rgba(244,119,33,.2);
+}
+
+.inti-brand-name {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: .5px;
+    color: #FFFFFF;
+    line-height: 1.1;
+}
+
+.inti-brand-subtitle {
+    margin-top: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    color: #AAB5C3;
+}
+
+.inti-sidebar-divider {
+    height: 1px;
+    margin: 12px 8px 20px;
+    background: #35404D;
+}
+
+.inti-menu-heading {
+    margin: 20px 11px 9px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.6px;
+    color: #8390A2;
+}
+
+/* Botones de navegación */
 
 section[data-testid="stSidebar"]
-div[role="radiogroup"] label {
-    border-radius: 10px;
-    padding: 9px 12px;
-    transition: background 0.2s ease,
-                transform 0.2s ease;
+div[class*="st-key-inti-nav-"] {
+    margin-bottom: 3px;
 }
 
 section[data-testid="stSidebar"]
-div[role="radiogroup"] label:hover {
-    background: var(--inti-dark-soft);
-    transform: translateX(3px);
+div[class*="st-key-inti-nav-"] button {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    color: #C8D1DD !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 12px;
+    box-shadow: none !important;
+    transition: background .18s ease,
+                color .18s ease,
+                transform .18s ease;
 }
 
 section[data-testid="stSidebar"]
-div[role="radiogroup"]
-label:has(input:checked) {
-    background: rgba(244,119,33,0.18);
-    border-left: 3px solid var(--inti-orange);
+div[class*="st-key-inti-nav-"] button p {
+    color: inherit !important;
 }
 
-/* Títulos */
-
-h1, h2, h3 {
-    color: var(--inti-text);
-    letter-spacing: -0.4px;
+section[data-testid="stSidebar"]
+div[class*="st-key-inti-nav-"] button:hover {
+    background: var(--inti-sidebar-hover) !important;
+    color: #FFFFFF !important;
+    transform: translateX(2px);
 }
 
-h1 {
-    font-weight: 750;
-}
-
-h2 {
+section[data-testid="stSidebar"]
+div[class*="st-key-inti-nav-active"] button {
+    background: rgba(244,119,33,.17) !important;
+    border-left: 3px solid var(--inti-orange) !important;
+    color: #FFAB70 !important;
     font-weight: 700;
 }
 
-/* Botones */
+.inti-sidebar-footer {
+    padding: 8px 12px 15px;
+}
+
+.inti-company {
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: .6px;
+}
+
+.inti-version {
+    color: #93A0B1;
+    font-size: 10px;
+    margin-top: 6px;
+    line-height: 1.6;
+}
+
+/* Botón para volver a portada */
+
+section[data-testid="stSidebar"]
+button:not([data-testid]) {
+    border-radius: 10px;
+}
+
+/* ==========================================================
+   TIPOGRAFÍA
+   ========================================================== */
+
+h1, h2, h3, h4 {
+    color: var(--inti-text);
+    letter-spacing: -.5px;
+}
+
+h1 {
+    font-size: clamp(28px, 3vw, 39px);
+    font-weight: 800;
+}
+
+h2 {
+    font-weight: 750;
+}
+
+h3 {
+    font-weight: 700;
+}
+
+p {
+    line-height: 1.6;
+}
+
+/* ==========================================================
+   BOTONES GENERALES
+   ========================================================== */
 
 .stButton > button,
-.stFormSubmitButton > button {
+.stFormSubmitButton > button,
+.stDownloadButton > button {
     border-radius: 10px;
     font-weight: 650;
-    padding: 0.65rem 1.1rem;
-    transition: transform 0.18s ease,
-                box-shadow 0.18s ease,
-                background 0.18s ease;
+    transition: transform .18s ease,
+                box-shadow .18s ease,
+                background .18s ease;
 }
 
 .stButton > button:hover,
-.stFormSubmitButton > button:hover {
+.stFormSubmitButton > button:hover,
+.stDownloadButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 16px rgba(20,30,45,.10);
+}
+
+button[kind="primary"],
+button[data-testid="stBaseButton-primary"] {
+    background: var(--inti-orange) !important;
+    border-color: var(--inti-orange) !important;
+    color: #FFFFFF !important;
+}
+
+button[kind="primary"]:hover,
+button[data-testid="stBaseButton-primary"]:hover {
+    background: var(--inti-orange-hover) !important;
+    border-color: var(--inti-orange-hover) !important;
+}
+
+/* ==========================================================
+   MÉTRICAS
+   ========================================================== */
+
+div[data-testid="stMetric"] {
+    background: var(--inti-card);
+    border: 1px solid var(--inti-border);
+    border-radius: var(--inti-radius);
+    padding: 18px;
+    box-shadow: var(--inti-shadow);
+    min-height: 112px;
+    transition: transform .2s ease,
+                box-shadow .2s ease;
+}
+
+div[data-testid="stMetric"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.12);
+    box-shadow: 0 8px 24px rgba(20,30,45,.075);
 }
 
-button[kind="primary"] {
-    background: var(--inti-orange);
-    border-color: var(--inti-orange);
-    color: white;
+div[data-testid="stMetricLabel"] {
+    color: var(--inti-muted);
+    font-weight: 600;
 }
 
-button[kind="primary"]:hover {
-    background: var(--inti-orange-hover);
-    border-color: var(--inti-orange-hover);
-    color: white;
+div[data-testid="stMetricValue"] {
+    color: var(--inti-text);
+    font-weight: 800;
+    letter-spacing: -.6px;
 }
 
-/* Tarjetas y contenedores */
+/* ==========================================================
+   TARJETAS
+   ========================================================== */
 
 div[data-testid="stVerticalBlockBorderWrapper"] {
     border-radius: var(--inti-radius);
 }
 
-/* Métricas */
-
-div[data-testid="stMetric"] {
-    background: white;
-    border: 1px solid var(--inti-border);
-    border-radius: var(--inti-radius);
-    padding: 16px;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.035);
+div[data-testid="stVerticalBlockBorderWrapper"]:has(
+    > div[data-testid="stVerticalBlock"]
+) {
+    transition: box-shadow .2s ease;
 }
 
-div[data-testid="stMetricValue"] {
-    font-weight: 750;
-}
-
-/* Tablas */
-
-div[data-testid="stDataFrame"] {
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-/* Formularios */
+/* ==========================================================
+   FORMULARIOS
+   ========================================================== */
 
 div[data-testid="stForm"] {
-    background: white;
     border: 1px solid var(--inti-border);
-    border-radius: 14px;
+    border-radius: var(--inti-radius);
+    background: var(--inti-card);
     padding: 20px;
 }
 
-/* Pestañas */
-
-button[data-baseweb="tab"] {
-    border-radius: 8px 8px 0 0;
-    font-weight: 600;
-}
-
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: var(--inti-orange);
-}
-
-/* Campos */
-
-input, textarea {
+div[data-testid="stTextInput"] input,
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextArea"] textarea {
     border-radius: 9px;
 }
 
-/* Ocultar elementos decorativos */
-
-#MainMenu {
-    visibility: hidden;
+div[data-testid="stTextInput"] input:focus,
+div[data-testid="stTextArea"] textarea:focus {
+    border-color: var(--inti-orange);
 }
 
-footer {
-    visibility: hidden;
+/* ==========================================================
+   TABLAS
+   ========================================================== */
+
+div[data-testid="stDataFrame"] {
+    overflow: hidden;
+    border: 1px solid var(--inti-border);
+    border-radius: 12px;
+    background: #FFFFFF;
 }
 
-/* Animación de entrada */
+/* ==========================================================
+   PESTAÑAS
+   ========================================================== */
 
-@keyframes intiFadeIn {
+button[data-baseweb="tab"] {
+    font-weight: 600;
+    border-radius: 8px 8px 0 0;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: var(--inti-orange) !important;
+}
+
+div[data-baseweb="tab-highlight"] {
+    background: var(--inti-orange) !important;
+}
+
+/* ==========================================================
+   ALERTAS
+   ========================================================== */
+
+div[data-testid="stAlert"] {
+    border-radius: 11px;
+}
+
+/* ==========================================================
+   COMPONENTES INTI PERSONALIZADOS
+   ========================================================== */
+
+.inti-page-header {
+    padding: 6px 0 24px;
+}
+
+.inti-eyebrow {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--inti-orange);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 9px;
+}
+
+.inti-page-title {
+    font-size: clamp(29px, 3vw, 40px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--inti-text);
+    margin: 0;
+}
+
+.inti-page-description {
+    color: var(--inti-muted);
+    font-size: 14px;
+    margin-top: 10px;
+    max-width: 760px;
+}
+
+.inti-section-title {
+    font-size: 19px;
+    font-weight: 750;
+    margin: 12px 0 18px;
+    color: var(--inti-text);
+}
+
+.inti-hero {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(
+        115deg,
+        #202630,
+        #303A48
+    );
+    border-radius: 18px;
+    padding: 32px 34px;
+    color: #FFFFFF;
+    margin-bottom: 22px;
+}
+
+.inti-hero::after {
+    content: "";
+    position: absolute;
+    right: -65px;
+    top: -100px;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    border: 1px solid rgba(244,119,33,.3);
+    box-shadow:
+        0 0 0 40px rgba(244,119,33,.045),
+        0 0 0 90px rgba(244,119,33,.025);
+    animation: intiHeroPulse 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.inti-hero-title {
+    position: relative;
+    z-index: 1;
+    color: #FFFFFF;
+    font-size: clamp(25px, 3vw, 36px);
+    font-weight: 800;
+    letter-spacing: -.8px;
+}
+
+.inti-hero-text {
+    position: relative;
+    z-index: 1;
+    color: #CBD3DE;
+    max-width: 680px;
+    margin-top: 12px;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.inti-hero-tag {
+    position: relative;
+    z-index: 1;
+    color: #FFAD72;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+}
+
+.inti-info-card {
+    padding: 20px;
+    border-radius: 14px;
+    background: #FFFFFF;
+    border: 1px solid var(--inti-border);
+    min-height: 140px;
+    box-shadow: var(--inti-shadow);
+}
+
+.inti-info-card-title {
+    font-size: 15px;
+    font-weight: 750;
+    color: var(--inti-text);
+    margin-bottom: 9px;
+}
+
+.inti-info-card-text {
+    font-size: 12px;
+    color: var(--inti-muted);
+    line-height: 1.7;
+}
+
+/* ==========================================================
+   ANIMACIONES
+   ========================================================== */
+
+@keyframes intiHeroPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: .7;
+    }
+    50% {
+        transform: scale(1.08);
+        opacity: 1;
+    }
+}
+
+@keyframes intiAppear {
     from {
         opacity: 0;
-        transform: translateY(8px);
+        transform: translateY(7px);
     }
     to {
         opacity: 1;
@@ -190,27 +502,40 @@ footer {
     }
 }
 
-.block-container {
-    animation: intiFadeIn 0.35s ease-out;
+[data-testid="stMainBlockContainer"] {
+    animation: intiAppear .3s ease-out;
 }
 
-/* Accesibilidad */
-
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
-/* Adaptación móvil */
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
 
 @media (max-width: 768px) {
-    .block-container {
+
+    [data-testid="stMainBlockContainer"] {
         padding: 1rem;
     }
 
+    .inti-hero {
+        padding: 24px 20px;
+    }
+
+    .inti-info-card {
+        min-height: auto;
+    }
+
     div[data-testid="stMetric"] {
-        padding: 10px;
+        padding: 12px;
+        min-height: 90px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
     }
 }
