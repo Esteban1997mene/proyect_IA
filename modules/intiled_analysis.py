@@ -3,12 +3,26 @@
 # INTI PROJECTS ENTERPRISE
 # INTILED SAS BIC
 #
-# Archivo: modules/intiled_analysis.py
-# Análisis de viabilidad por convocatoria
+# ARCHIVO: modules/intiled_analysis.py
+#
+# ANALISIS AUTOMATICO DE VIABILIDAD CON GOOGLE GEMINI
+#
+# Version: 3.0
+#
+# Funciones:
+# - Seleccionar expedientes independientes
+# - Consultar documentos cargados
+# - Analizar automaticamente con Gemini
+# - Mostrar evaluacion tecnica, juridica y financiera
+# - Recomendar participacion, alianza o descarte
+# - Guardar resultados por convocatoria
+# - Exportar informe de evaluacion
 # ============================================================
 
 import hashlib
-import html
+import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -18,118 +32,195 @@ from services.opportunity_workspace import (
     oportunidad_activa,
     activar_oportunidad,
     sincronizar_legacy,
+    guardar_datos_modulo,
+    obtener_datos_modulo,
     actualizar_estado,
 )
 
-from services.analysis_workspace import (
-    cargar_analisis,
-    guardar_analisis,
-    recomendar_participacion,
-    actualizar_decision,
-    resumen_analisis,
+from services.ai_viability import (
+    api_configurada,
+    documentos_del_expediente,
+    evaluar_con_ia,
+    DECISIONES,
 )
 
 
 # ============================================================
-# CONSTANTES
+# CONFIGURACION GENERAL
 # ============================================================
 
-OPCIONES_CUMPLIMIENTO = [
-    "Sin verificar",
-    "Cumple - verificado",
-    "No cumple - verificado",
-]
+MODULO_IA = "analisis_intiled_ia"
 
-OPCIONES_ESTADO = [
-    "Pendiente",
-    "En evaluación",
-    "Evaluado",
-]
+ZONA = ZoneInfo("America/Bogota")
 
-OPCIONES_CONSORCIO = [
-    "Sin verificar",
-    "Sí, confirmado en pliegos",
-    "No, confirmado en pliegos",
-]
+ESTADOS_IA = {
+    "FAVORABLE": "Favorable preliminar",
+    "RIESGO": "Requiere revision",
+    "NO_CUMPLE": "Incumplimiento identificado",
+    "SIN_EVIDENCIA": "Sin evidencia suficiente",
+}
 
-OPCIONES_DECISION = [
-    "Pendiente de verificación",
-    "Evaluar participación individual",
-    "Evaluar alianza",
-    "No recomendar postulación individual",
-    "No participar",
-]
+ESTADOS_GESTION = {
+    "INDIVIDUAL": "En evaluación",
+    "ALIANZA": "Evaluando alianza",
+    "NO_PARTICIPAR": "No participar",
+    "PENDIENTE": "Por revisar",
+}
 
 
 # ============================================================
-# ESTILOS INTILED
+# FUNCIONES DE UTILIDAD
 # ============================================================
 
-def estilos_analisis():
+def codigo_seguro(valor):
+    return hashlib.sha256(
+        str(valor).encode("utf-8")
+    ).hexdigest()[:14]
+
+
+def fecha_actual():
+    return datetime.now(ZONA).isoformat(
+        timespec="seconds"
+    )
+
+
+def formato_presupuesto(valor, moneda="COP"):
+    if valor is None:
+        return "No informado"
+
+    try:
+        return (
+            f"{moneda} "
+            f"${float(valor):,.0f}"
+        )
+
+    except (ValueError, TypeError):
+        return "No informado"
+
+
+def texto_seguro(valor, defecto="No informado"):
+    if valor is None:
+        return defecto
+
+    texto = str(valor).strip()
+
+    return texto if texto else defecto
+
+
+def titulo_corto(texto, limite=110):
+    texto = str(texto or "Sin titulo")
+
+    if len(texto) > limite:
+        return texto[:limite] + "..."
+
+    return texto
+
+
+def guardar_resultado(expediente, resultado):
+    """
+    Protege el expediente activo.
+    No guarda resultados en otra convocatoria.
+    """
+
+    activo = oportunidad_activa()
+
+    if activo is None:
+        return False
+
+    if activo["id"] != expediente["id"]:
+        return False
+
+    if resultado.get("expediente_id") != (
+        expediente["id"]
+    ):
+        return False
+
+    correcto = guardar_datos_modulo(
+        MODULO_IA,
+        resultado,
+    )
+
+    if not correcto:
+        return False
+
+    decision = resultado.get(
+        "decision", "PENDIENTE"
+    )
+
+    estado = ESTADOS_GESTION.get(
+        decision, "Por revisar"
+    )
+
+    actualizar_estado(
+        expediente["id"],
+        estado,
+    )
+
+    return True
+
+
+def cargar_resultado():
+    expediente = oportunidad_activa()
+
+    if expediente is None:
+        return None
+
+    resultado = obtener_datos_modulo(
+        MODULO_IA,
+        defecto=None,
+    )
+
+    if not isinstance(resultado, dict):
+        return None
+
+    if resultado.get("expediente_id") != (
+        expediente["id"]
+    ):
+        return None
+
+    return resultado
+
+
+# ============================================================
+# ESTILOS CORPORATIVOS
+# ============================================================
+
+def estilos_intiled():
 
     st.markdown(
         """
         <style>
 
-        .inti-analysis-hero {
-            background: linear-gradient(
-                115deg,
-                #202630,
-                #303A48
-            );
-            border-radius: 18px;
-            padding: 30px 34px;
-            margin-bottom: 24px;
+        /* Estilos exclusivos del modulo */
+
+        .inti-ai-result {
+            background: #FFFFFF;
+            border: 1px solid #E5EAF0;
+            border-left: 5px solid #F47721;
+            border-radius: 13px;
+            padding: 22px;
+            margin: 12px 0 20px 0;
         }
 
-        .inti-analysis-eyebrow {
-            font-size: 12px;
+        .inti-ai-result-title {
+            color: #242C39;
+            font-size: 22px;
             font-weight: 800;
-            letter-spacing: 1.5px;
-            color: #FFAD72;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
-        .inti-analysis-title {
-            color: #FFFFFF;
-            font-size: 35px;
-            font-weight: 800;
-            line-height: 1.2;
-            margin-bottom: 12px;
-        }
-
-        .inti-analysis-description {
-            color: #D2D9E3;
+        .inti-ai-result-text {
+            color: #566273;
             font-size: 15px;
-            line-height: 1.7;
+            line-height: 1.75;
         }
 
-        .inti-analysis-heading {
-            font-size: 20px;
-            font-weight: 750;
-            color: #242C39;
-            margin: 24px 0 14px;
-        }
-
-        .inti-analysis-label {
-            color: #F47721;
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-
-        .inti-analysis-object {
-            color: #242C39;
-            font-weight: 750;
-            font-size: 20px;
-            line-height: 1.5;
-        }
-
-        .inti-analysis-muted {
-            color: #718092;
-            font-size: 13px;
-            line-height: 1.7;
+        .inti-ai-divider {
+            height: 3px;
+            width: 65px;
+            background: #F47721;
+            border-radius: 3px;
+            margin: 12px 0 20px 0;
         }
 
         </style>
@@ -139,139 +230,64 @@ def estilos_analisis():
 
 
 # ============================================================
-# UTILIDADES
-# ============================================================
-
-def identificador_seguro(identificador):
-
-    return hashlib.sha256(
-        str(identificador).encode("utf-8")
-    ).hexdigest()[:14]
-
-
-def valor_cumplimiento(valor):
-
-    if valor is True:
-        return "Cumple - verificado"
-
-    if valor is False:
-        return "No cumple - verificado"
-
-    return "Sin verificar"
-
-
-def convertir_cumplimiento(texto):
-
-    if texto == "Cumple - verificado":
-        return True
-
-    if texto == "No cumple - verificado":
-        return False
-
-    return None
-
-
-def valor_consorcio(valor):
-
-    if valor is True:
-        return "Sí, confirmado en pliegos"
-
-    if valor is False:
-        return "No, confirmado en pliegos"
-
-    return "Sin verificar"
-
-
-def convertir_consorcio(texto):
-
-    if texto == "Sí, confirmado en pliegos":
-        return True
-
-    if texto == "No, confirmado en pliegos":
-        return False
-
-    return None
-
-
-def indice_opcion(opciones, valor):
-
-    if valor in opciones:
-        return opciones.index(valor)
-
-    return 0
-
-
-def formato_dinero(valor):
-
-    if valor is None:
-        return "No informado"
-
-    try:
-        return f"$ {float(valor):,.0f} COP"
-
-    except (ValueError, TypeError):
-        return "No informado"
-
-
-def mostrar_resultado(mensaje, correcto):
-
-    if correcto:
-        st.success(mensaje)
-
-    else:
-        st.error(mensaje)
-
-
-# ============================================================
 # ENCABEZADO
 # ============================================================
 
 def mostrar_encabezado():
+    """
+    Se utilizan elementos nativos Streamlit
+    para evitar que el HTML aparezca como texto.
+    """
 
-    st.markdown(
-        """
-        <div class="inti-analysis-hero">
+    with st.container(border=True):
 
-            <div class="inti-analysis-eyebrow">
-                INTILED SAS BIC · EVALUACIÓN DE VIABILIDAD
-            </div>
+        st.caption(
+            "INTILED SAS BIC | INTI PROJECTS ENTERPRISE"
+        )
 
-            <div class="inti-analysis-title">
-                Análisis INTILED
-            </div>
+        st.title(
+            "Analisis de viabilidad"
+        )
 
-            <div class="inti-analysis-description">
-                Evalúa los requisitos técnicos,
-                jurídicos, financieros y comerciales
-                de cada convocatoria.
+        st.markdown(
+            "Evaluacion asistida por **Google Gemini** "
+            "para determinar la conveniencia de "
+            "participar en convocatorias de Colombia."
+        )
 
-                La información se organiza de manera
-                independiente por expediente.
-            </div>
+        st.write(
+            "El sistema analiza la informacion "
+            "disponible, identifica riesgos "
+            "y recomienda una ruta de participacion."
+        )
 
-        </div>
-        """,
-        unsafe_allow_html=True,
+        st.markdown(
+            '<div class="inti-ai-divider"></div>',
+            unsafe_allow_html=True,
+        )
+
+
+# ============================================================
+# SELECTOR DE CONVOCATORIAS
+# ============================================================
+
+def seleccionar_convocatoria():
+
+    st.subheader(
+        "01. Seleccionar convocatoria"
     )
-
-
-# ============================================================
-# SELECCIONAR EXPEDIENTE
-# ============================================================
-
-def selector_expedientes():
 
     expedientes = listar_oportunidades()
 
     if not expedientes:
 
-        st.info(
-            "Todavía no tienes oportunidades "
-            "guardadas. Entra al Radar de "
-            "oportunidades y guarda una convocatoria."
+        st.warning(
+            "Todavia no existen convocatorias "
+            "guardadas. Ingresa al Radar "
+            "y guarda una oportunidad."
         )
 
-        return False
+        return None
 
     activo = oportunidad_activa()
 
@@ -280,7 +296,7 @@ def selector_expedientes():
         for expediente in expedientes
     ]
 
-    etiquetas = {}
+    nombres = {}
 
     for expediente in expedientes:
 
@@ -288,789 +304,841 @@ def selector_expedientes():
             "oportunidad", {}
         )
 
-        titulo = oportunidad.get(
-            "titulo", "Sin título"
+        codigo = texto_seguro(
+            oportunidad.get("codigo"),
+            "Sin codigo",
         )
 
-        codigo = oportunidad.get(
-            "codigo", "Sin código"
+        titulo = titulo_corto(
+            oportunidad.get("titulo"),
+            95,
         )
 
-        etiquetas[expediente["id"]] = (
-            f"{codigo} · {titulo[:90]}"
+        nombres[expediente["id"]] = (
+            codigo + " | " + titulo
         )
+
+    posicion = 0
 
     if activo and activo["id"] in opciones:
-
         posicion = opciones.index(
             activo["id"]
         )
 
-    else:
-        posicion = 0
+    c1, c2 = st.columns([3, 1])
 
-    st.markdown(
-        '<div class="inti-analysis-heading">'
-        '01. Selección de convocatoria'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    with c1:
 
-    columna_selector, columna_boton = (
-        st.columns([3, 1])
-    )
-
-    with columna_selector:
-
-        seleccion = st.selectbox(
+        seleccionado = st.selectbox(
             "Expediente de trabajo",
             opciones,
             index=posicion,
-            format_func=lambda identificador: (
-                etiquetas.get(
-                    identificador,
-                    identificador
-                )
+            format_func=lambda valor: (
+                nombres.get(valor, valor)
             ),
             key=(
-                "inti_analysis_selector_"
-                + str(activo["id"] if activo else "none")
+                "inti_ai_selector_"
+                + codigo_seguro(
+                    activo["id"]
+                    if activo else "sin_activo"
+                )
             ),
         )
 
-    with columna_boton:
+    with c2:
 
         st.write("")
-
         st.write("")
 
-        cambiar = st.button(
+        if st.button(
             "Activar expediente",
             type="primary",
             use_container_width=True,
-            key="inti_analysis_activar",
-        )
+            key="inti_ai_activar",
+        ):
 
-    if cambiar:
+            if activar_oportunidad(
+                seleccionado
+            ):
 
-        if activar_oportunidad(seleccion):
+                sincronizar_legacy()
 
-            sincronizar_legacy()
+                st.rerun()
 
-            st.rerun()
+            else:
 
-        else:
-
-            st.error(
-                "No fue posible activar "
-                "la convocatoria seleccionada."
-            )
+                st.error(
+                    "No fue posible activar "
+                    "el expediente seleccionado."
+                )
 
     if activo is None:
 
-        st.warning(
-            "Selecciona un expediente y "
-            "presiona Activar expediente."
+        st.info(
+            "Selecciona una convocatoria "
+            "y presiona Activar expediente."
         )
 
-        return False
+        return None
 
-    return True
+    return activo
 
 
 # ============================================================
-# FICHA DE LA CONVOCATORIA
+# FICHA DE CONVOCATORIA ACTIVA
 # ============================================================
 
-def ficha_convocatoria(expediente):
+def mostrar_convocatoria(expediente):
 
-    item = expediente.get(
+    st.subheader(
+        "02. Informacion de la convocatoria"
+    )
+
+    oportunidad = expediente.get(
         "oportunidad", {}
     )
 
-    titulo = html.escape(
-        str(
-            item.get("titulo")
-            or "Convocatoria sin título"
-        )
-    )
-
-    st.markdown(
-        '<div class="inti-analysis-heading">'
-        '02. Expediente activo'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
     with st.container(border=True):
 
         st.markdown(
-            '<div class="inti-analysis-label">'
-            'CONVOCATORIA SELECCIONADA'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            f'<div class="inti-analysis-object">'
-            f'{titulo}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        st.write("")
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-
-            st.write(
-                "**Entidad contratante:** "
-                + str(
-                    item.get("entidad")
-                    or "No informada"
-                )
+            "### "
+            + texto_seguro(
+                oportunidad.get("titulo"),
+                "Convocatoria sin titulo",
             )
-
-            st.write(
-                "**Código del proceso:** "
-                + str(
-                    item.get("codigo")
-                    or "No informado"
-                )
-            )
-
-            st.write(
-                "**Departamento:** "
-                + str(
-                    item.get("region")
-                    or "Sin determinar"
-                )
-            )
-
-        with c2:
-
-            st.write(
-                "**Presupuesto:** "
-                + formato_dinero(
-                    item.get("presupuesto")
-                )
-            )
-
-            st.write(
-                "**Fecha de cierre:** "
-                + str(
-                    item.get("fecha_cierre")
-                    or "Por verificar"
-                )
-            )
-
-            st.write(
-                "**Municipio registrado:** "
-                + str(
-                    item.get("localidad")
-                    or "Sin determinar"
-                )
-            )
-
-        st.caption(
-            "La ubicación puede corresponder "
-            "a la entidad contratante y no al "
-            "lugar de ejecución del contrato."
-        )
-
-
-# ============================================================
-# FORMULARIO DE COMPONENTE
-# ============================================================
-
-def formulario_componente(
-    identificador,
-    nombre_componente,
-    titulo,
-    campos,
-):
-
-    analisis = cargar_analisis()
-
-    if analisis is None:
-        return
-
-    datos = analisis.get(
-        nombre_componente, {}
-    )
-
-    sufijo = (
-        identificador_seguro(identificador)
-        + "_"
-        + nombre_componente
-    )
-
-    st.markdown(f"#### {titulo}")
-
-    with st.form(
-        key=f"form_{sufijo}"
-    ):
-
-        estado = st.selectbox(
-            "Estado de evaluación",
-            OPCIONES_ESTADO,
-            index=indice_opcion(
-                OPCIONES_ESTADO,
-                datos.get("estado", "Pendiente")
-            ),
-            key=f"estado_{sufijo}",
-        )
-
-        cumplimiento = st.selectbox(
-            "Cumplimiento verificado",
-            OPCIONES_CUMPLIMIENTO,
-            index=indice_opcion(
-                OPCIONES_CUMPLIMIENTO,
-                valor_cumplimiento(
-                    datos.get("cumplimiento")
-                )
-            ),
-            help=(
-                "Marca Cumple o No cumple "
-                "únicamente cuando exista "
-                "soporte documental."
-            ),
-            key=f"cumplimiento_{sufijo}",
-        )
-
-        nuevos_datos = {
-            "estado": estado,
-            "cumplimiento": convertir_cumplimiento(
-                cumplimiento
-            ),
-        }
-
-        for campo, etiqueta in campos:
-
-            nuevos_datos[campo] = st.text_area(
-                etiqueta,
-                value=str(
-                    datos.get(campo, "") or ""
-                ),
-                height=110,
-                key=f"{campo}_{sufijo}",
-            )
-
-        if nombre_componente == "analisis_juridico":
-
-            consorcio = st.selectbox(
-                "¿Los pliegos permiten consorcio "
-                "o unión temporal?",
-                OPCIONES_CONSORCIO,
-                index=indice_opcion(
-                    OPCIONES_CONSORCIO,
-                    valor_consorcio(
-                        datos.get("permite_consorcio")
-                    )
-                ),
-                key=f"consorcio_{sufijo}",
-            )
-
-            nuevos_datos[
-                "permite_consorcio"
-            ] = convertir_consorcio(
-                consorcio
-            )
-
-        enviar = st.form_submit_button(
-            "Guardar evaluación",
-            type="primary",
-            use_container_width=True,
-        )
-
-    if enviar:
-
-        actualizado = cargar_analisis()
-
-        if actualizado is None:
-
-            st.error(
-                "No hay una convocatoria activa."
-            )
-
-            return
-
-        if (
-            actualizado.get("identificador")
-            != identificador
-        ):
-
-            st.error(
-                "Cambió el expediente activo. "
-                "La información no fue guardada."
-            )
-
-            return
-
-        actualizado[
-            nombre_componente
-        ].update(nuevos_datos)
-
-        correcto, mensaje = guardar_analisis(
-            actualizado
-        )
-
-        mostrar_resultado(
-            mensaje, correcto
-        )
-
-
-# ============================================================
-# EVALUACIÓN TÉCNICA
-# ============================================================
-
-def evaluacion_tecnica(identificador):
-
-    formulario_componente(
-        identificador,
-        "analisis_tecnico",
-        "Evaluación técnica",
-        [
-            (
-                "experiencia_requerida",
-                "Experiencia exigida por los pliegos",
-            ),
-            (
-                "experiencia_acreditada",
-                "Experiencia contractual acreditada "
-                "por INTILED",
-            ),
-            (
-                "capacidad_operativa",
-                "Capacidad técnica y operativa",
-            ),
-            (
-                "observaciones",
-                "Observaciones técnicas",
-            ),
-        ],
-    )
-
-
-# ============================================================
-# EVALUACIÓN JURÍDICA
-# ============================================================
-
-def evaluacion_juridica(identificador):
-
-    formulario_componente(
-        identificador,
-        "analisis_juridico",
-        "Evaluación jurídica",
-        [
-            (
-                "requisitos_habilitantes",
-                "Requisitos jurídicos habilitantes",
-            ),
-            (
-                "documentos_pendientes",
-                "Documentos por verificar o subsanar",
-            ),
-            (
-                "observaciones",
-                "Observaciones jurídicas",
-            ),
-        ],
-    )
-
-
-# ============================================================
-# EVALUACIÓN FINANCIERA
-# ============================================================
-
-def evaluacion_financiera(identificador):
-
-    formulario_componente(
-        identificador,
-        "analisis_financiero",
-        "Evaluación financiera",
-        [
-            (
-                "indicadores_requeridos",
-                "Indicadores financieros exigidos",
-            ),
-            (
-                "capacidad_financiera",
-                "Capacidad financiera de INTILED",
-            ),
-            (
-                "garantias",
-                "Garantías y condiciones económicas",
-            ),
-            (
-                "observaciones",
-                "Observaciones financieras",
-            ),
-        ],
-    )
-
-
-# ============================================================
-# EVALUACIÓN COMERCIAL
-# ============================================================
-
-def evaluacion_comercial(identificador):
-
-    formulario_componente(
-        identificador,
-        "analisis_comercial",
-        "Evaluación comercial",
-        [
-            (
-                "competidores",
-                "Competidores identificados",
-            ),
-            (
-                "aliados_potenciales",
-                "Aliados estratégicos potenciales",
-            ),
-            (
-                "riesgos",
-                "Riesgos comerciales y operativos",
-            ),
-            (
-                "observaciones",
-                "Observaciones comerciales",
-            ),
-        ],
-    )
-
-
-# ============================================================
-# RECOMENDACIÓN Y DECISIÓN
-# ============================================================
-
-def seccion_decision(identificador):
-
-    st.markdown(
-        '<div class="inti-analysis-heading">'
-        '04. Recomendación de participación'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    analisis = cargar_analisis()
-
-    if analisis is None:
-        return
-
-    recomendacion = recomendar_participacion(
-        analisis
-    )
-
-    with st.container(border=True):
-
-        st.markdown(
-            "**Resultado preliminar del sistema**"
-        )
-
-        st.info(
-            recomendacion["resultado"]
         )
 
         st.write(
-            recomendacion["justificacion"]
+            "**Entidad contratante:** "
+            + texto_seguro(
+                oportunidad.get("entidad")
+            )
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+
+            st.metric(
+                "Presupuesto",
+                formato_presupuesto(
+                    oportunidad.get("presupuesto"),
+                    oportunidad.get(
+                        "moneda", "COP"
+                    ),
+                ),
+            )
+
+        with col2:
+
+            st.metric(
+                "Departamento",
+                texto_seguro(
+                    oportunidad.get("region")
+                ),
+            )
+
+        with col3:
+
+            st.metric(
+                "Fecha de cierre",
+                texto_seguro(
+                    oportunidad.get("fecha_cierre"),
+                    "Por verificar",
+                ),
+            )
+
+        st.write(
+            "**Codigo del proceso:** "
+            + texto_seguro(
+                oportunidad.get("codigo")
+            )
+        )
+
+        st.write(
+            "**Municipio registrado:** "
+            + texto_seguro(
+                oportunidad.get("localidad")
+            )
+        )
+
+        st.write(
+            "**Estado oficial registrado:** "
+            + texto_seguro(
+                oportunidad.get("estado")
+            )
         )
 
         st.caption(
-            "Esta recomendación utiliza los "
-            "cumplimientos registrados por el usuario. "
-            "No verifica automáticamente el contenido "
-            "de los pliegos ni certifica requisitos."
+            "Los datos territoriales pueden "
+            "corresponder a la entidad contratante. "
+            "La fecha de cierre y la vigencia "
+            "deben confirmarse en SECOP II."
         )
 
-    decision_actual = analisis.get(
-        "decision", {}
-    )
-
-    sufijo = identificador_seguro(
-        identificador
-    )
-
-    with st.form(
-        key=f"decision_form_{sufijo}"
-    ):
-
-        resultado = st.selectbox(
-            "Decisión de seguimiento",
-            OPCIONES_DECISION,
-            index=indice_opcion(
-                OPCIONES_DECISION,
-                decision_actual.get(
-                    "resultado",
-                    "Pendiente de verificación"
-                )
-            ),
-            key=f"decision_resultado_{sufijo}",
+        enlace = oportunidad.get(
+            "enlace", ""
         )
-
-        justificacion = st.text_area(
-            "Justificación de la decisión",
-            value=str(
-                decision_actual.get(
-                    "justificacion", ""
-                )
-            ),
-            height=140,
-            key=f"decision_justificacion_{sufijo}",
-        )
-
-        responsable = st.text_input(
-            "Responsable de la evaluación",
-            value=str(
-                decision_actual.get(
-                    "responsable", ""
-                )
-            ),
-            key=f"decision_responsable_{sufijo}",
-        )
-
-        guardar = st.form_submit_button(
-            "Guardar decisión",
-            type="primary",
-            use_container_width=True,
-        )
-
-    if guardar:
-
-        activo = oportunidad_activa()
 
         if (
-            activo is None
-            or activo["id"] != identificador
+            isinstance(enlace, str)
+            and enlace.startswith(
+                ("https://", "http://")
+            )
         ):
 
-            st.error(
-                "La convocatoria activa cambió. "
-                "No se guardó la decisión."
+            st.link_button(
+                "Consultar proceso oficial",
+                enlace,
+                use_container_width=True,
             )
 
-            return
-
-        correcto, mensaje = actualizar_decision(
-            resultado,
-            justificacion,
-            responsable,
-        )
-
-        mostrar_resultado(
-            mensaje,
-            correcto,
-        )
-
 
 # ============================================================
-# HISTORIAL
+# VERIFICAR DOCUMENTACION DISPONIBLE
 # ============================================================
 
-def seccion_historial():
+def mostrar_documentos(expediente):
 
-    st.markdown(
-        '<div class="inti-analysis-heading">'
-        '05. Historial del análisis'
-        '</div>',
-        unsafe_allow_html=True,
+    st.subheader(
+        "03. Documentacion disponible"
     )
 
-    analisis = cargar_analisis()
-
-    if analisis is None:
-        return
-
-    historial = analisis.get(
-        "historial", []
+    documentos = documentos_del_expediente(
+        expediente
     )
 
-    if not historial:
+    total_caracteres = sum(
+        documento.get("caracteres", 0)
+        for documento in documentos
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.metric(
+            "Documentos legibles",
+            len(documentos),
+        )
+
+    with col2:
+
+        st.metric(
+            "Caracteres extraidos",
+            f"{total_caracteres:,}",
+        )
+
+    if not documentos:
+
+        st.warning(
+            "No se han incorporado pliegos "
+            "ni anexos legibles a esta convocatoria."
+        )
 
         st.info(
-            "Todavía no existen registros "
-            "de análisis guardados."
+            "Gemini puede revisar el objeto "
+            "contractual disponible, pero "
+            "sin los pliegos no puede verificar "
+            "los requisitos habilitantes."
         )
 
-        return
+    else:
 
-    for evento in reversed(
-        historial[-25:]
-    ):
-
-        with st.container(border=True):
-
-            st.write(
-                "**Fecha:** "
-                + str(
-                    evento.get("fecha", "")
-                )
-            )
-
-            st.write(
-                evento.get("evento", "")
-            )
-
-
-# ============================================================
-# RESUMEN GENERAL
-# ============================================================
-
-def resumen_general():
-
-    st.markdown(
-        '<div class="inti-analysis-heading">'
-        '06. Resumen de evaluaciones'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    registros = resumen_analisis()
-
-    if not registros:
-
-        st.info(
-            "No existen evaluaciones "
-            "guardadas todavía."
+        st.success(
+            "Se encontro documentacion "
+            "asociada a esta convocatoria."
         )
-
-        return
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Convocatorias evaluadas",
-        len(registros),
-    )
-
-    c2.metric(
-        "Pendientes de verificación",
-        sum(
-            registro["decision"]
-            == "Pendiente de verificación"
-            for registro in registros
-        ),
-    )
-
-    c3.metric(
-        "Alianzas por evaluar",
-        sum(
-            registro["decision"]
-            == "Evaluar alianza"
-            for registro in registros
-        ),
-    )
-
-    for registro in registros:
 
         with st.expander(
-            str(
-                registro.get("convocatoria")
-                or "Sin título"
-            )[:100]
+            "Consultar documentos disponibles"
         ):
 
-            st.write(
-                "**Entidad:** "
-                + str(
-                    registro.get("entidad", "")
+            for documento in documentos:
+
+                st.markdown(
+                    "**"
+                    + documento["nombre"]
+                    + "**"
                 )
+
+                st.caption(
+                    texto_seguro(
+                        documento.get("tipo"),
+                        "Documento",
+                    )
+                    + " | "
+                    + str(
+                        documento.get(
+                            "caracteres", 0
+                        )
+                    )
+                    + " caracteres"
+                )
+
+        if len(documentos) > 6:
+
+            st.warning(
+                "El motor actual procesa "
+                "como maximo seis documentos "
+                "por ejecucion."
+            )
+
+    st.caption(
+        "Los documentos se cargan desde "
+        "la pestaña Analisis documental. "
+        "La IA empleara el texto extraido "
+        "que se encuentra en el expediente."
+    )
+
+    return documentos
+
+
+# ============================================================
+# EJECUTAR GEMINI
+# ============================================================
+
+def ejecutar_analisis(expediente):
+
+    st.subheader(
+        "04. Evaluacion automatica con Gemini"
+    )
+
+    conectado = api_configurada()
+
+    if conectado:
+
+        st.success(
+            "El motor Google Gemini "
+            "tiene una clave API configurada."
+        )
+
+    else:
+
+        st.error(
+            "No se encuentra configurada "
+            "la clave GEMINI_API_KEY."
+        )
+
+        st.caption(
+            "Configura la clave en "
+            "Streamlit Cloud > Settings > Secrets."
+        )
+
+    st.write(
+        "El sistema examinara los datos "
+        "de la convocatoria y los documentos "
+        "disponibles para proponer una decision "
+        "comercial fundamentada."
+    )
+
+    st.caption(
+        "Cada ejecucion puede consumir cuota "
+        "o generar cargos en Google Gemini."
+    )
+
+    boton = st.button(
+        "Analizar viabilidad con Gemini",
+        type="primary",
+        use_container_width=True,
+        disabled=not conectado,
+        key=(
+            "inti_ai_ejecutar_"
+            + codigo_seguro(
+                expediente["id"]
+            )
+        ),
+    )
+
+    if not boton:
+        return
+
+    activo = oportunidad_activa()
+
+    if (
+        activo is None
+        or activo["id"] != expediente["id"]
+    ):
+
+        st.error(
+            "El expediente cambio antes "
+            "de ejecutar el analisis."
+        )
+
+        return
+
+    with st.spinner(
+        "Gemini esta evaluando los requisitos "
+        "y la viabilidad de la convocatoria..."
+    ):
+
+        resultado, error = evaluar_con_ia(
+            expediente
+        )
+
+    if error:
+
+        st.error(
+            "No fue posible completar "
+            "el analisis."
+        )
+
+        st.warning(error)
+
+        return
+
+    if not isinstance(resultado, dict):
+
+        st.error(
+            "Gemini no devolvio "
+            "un resultado valido."
+        )
+
+        return
+
+    if resultado.get(
+        "expediente_id"
+    ) != expediente["id"]:
+
+        st.error(
+            "El identificador de la respuesta "
+            "no coincide con la convocatoria."
+        )
+
+        return
+
+    correcto = guardar_resultado(
+        expediente,
+        resultado,
+    )
+
+    if correcto:
+
+        st.success(
+            "El analisis fue realizado "
+            "y guardado en el expediente."
+        )
+
+        st.rerun()
+
+    else:
+
+        st.error(
+            "No se pudo guardar el resultado "
+            "en el expediente activo."
+        )
+
+
+# ============================================================
+# COMPONENTES DE ANALISIS
+# ============================================================
+
+def mostrar_componentes(resultado):
+
+    st.subheader(
+        "06. Evaluacion por componentes"
+    )
+
+    componentes = resultado.get(
+        "componentes", []
+    )
+
+    if not componentes:
+
+        st.info(
+            "No hay componentes disponibles."
+        )
+
+        return
+
+    for componente in componentes:
+
+        criterio = texto_seguro(
+            componente.get("criterio"),
+            "Criterio sin nombre",
+        )
+
+        estado = componente.get(
+            "estado",
+            "SIN_EVIDENCIA",
+        )
+
+        etiqueta = ESTADOS_IA.get(
+            estado,
+            "Por verificar",
+        )
+
+        with st.expander(
+            criterio + " | " + etiqueta,
+            expanded=estado != "FAVORABLE",
+        ):
+
+            st.markdown(
+                "**Analisis del especialista**"
             )
 
             st.write(
-                "**Decisión:** "
-                + str(
-                    registro.get("decision", "")
+                texto_seguro(
+                    componente.get("analisis"),
+                    "No disponible",
                 )
             )
 
+            st.markdown(
+                "**Evidencia utilizada**"
+            )
+
             st.write(
-                "**Última actualización:** "
-                + str(
-                    registro.get(
-                        "ultima_actualizacion"
-                    ) or "Sin dato"
+                texto_seguro(
+                    componente.get("evidencia"),
+                    "No aportada",
+                )
+            )
+
+            st.markdown(
+                "**Accion recomendada**"
+            )
+
+            st.write(
+                texto_seguro(
+                    componente.get("accion"),
+                    "Revisar documentacion",
                 )
             )
 
 
 # ============================================================
-# FUNCIÓN PRINCIPAL
+# LISTAS DE RESULTADOS
+# ============================================================
+
+def mostrar_lista(titulo, elementos):
+
+    st.markdown(
+        "#### " + titulo
+    )
+
+    if not isinstance(elementos, list):
+        elementos = []
+
+    if not elementos:
+
+        st.caption(
+            "Sin elementos registrados."
+        )
+
+        return
+
+    for elemento in elementos:
+
+        st.markdown(
+            "- " + str(elemento)
+        )
+
+
+# ============================================================
+# MOSTRAR RECOMENDACION
+# ============================================================
+
+def mostrar_decision(resultado):
+
+    st.subheader(
+        "05. Recomendacion de Gemini"
+    )
+
+    decision = resultado.get(
+        "decision",
+        "PENDIENTE",
+    )
+
+    etiqueta = DECISIONES.get(
+        decision,
+        "Informacion insuficiente",
+    )
+
+    st.markdown(
+        '<div class="inti-ai-result">'
+        '<div class="inti-ai-result-title">'
+        'Resultado del analisis'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "## " + etiqueta
+    )
+
+    resumen = texto_seguro(
+        resultado.get("resumen"),
+        "Sin resumen",
+    )
+
+    st.write(resumen)
+
+    st.markdown(
+        "**Justificacion de la recomendacion**"
+    )
+
+    st.write(
+        texto_seguro(
+            resultado.get("justificacion"),
+            "Sin justificacion",
+        )
+    )
+
+    confianza = resultado.get(
+        "confianza",
+        "BAJA",
+    )
+
+    st.caption(
+        "Confianza declarada por Gemini: "
+        + str(confianza)
+    )
+
+    st.caption(
+        "Fecha del analisis: "
+        + texto_seguro(
+            resultado.get("fecha"),
+            "Sin fecha",
+        )
+    )
+
+    st.caption(
+        "Modelo utilizado: "
+        + texto_seguro(
+            resultado.get("modelo"),
+            "Google Gemini",
+        )
+    )
+
+    st.info(
+        "Esta evaluacion es preliminar. "
+        "La recomendacion debe contrastarse "
+        "con los pliegos oficiales y la "
+        "experiencia contractual acreditada "
+        "por INTILED."
+    )
+
+
+# ============================================================
+# PLAN DE ACCION
+# ============================================================
+
+def mostrar_plan_accion(resultado):
+
+    st.subheader(
+        "07. Plan de accion recomendado"
+    )
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Requisitos pendientes",
+        "Riesgos",
+        "Alianzas",
+        "Proximos pasos",
+    ])
+
+    with tab1:
+
+        mostrar_lista(
+            "Requisitos pendientes",
+            resultado.get(
+                "requisitos_pendientes", []
+            ),
+        )
+
+    with tab2:
+
+        mostrar_lista(
+            "Riesgos identificados",
+            resultado.get(
+                "riesgos", []
+            ),
+        )
+
+    with tab3:
+
+        mostrar_lista(
+            "Aliados estrategicos requeridos",
+            resultado.get(
+                "alianzas_recomendadas", []
+            ),
+        )
+
+    with tab4:
+
+        mostrar_lista(
+            "Proximas actividades",
+            resultado.get(
+                "proximos_pasos", []
+            ),
+        )
+
+
+# ============================================================
+# FUENTES Y LIMITACIONES
+# ============================================================
+
+def mostrar_fuentes(resultado):
+
+    with st.expander(
+        "Fuentes revisadas y limitaciones"
+    ):
+
+        mostrar_lista(
+            "Documentos considerados",
+            resultado.get(
+                "fuentes_revisadas", []
+            ),
+        )
+
+        mostrar_lista(
+            "Limitaciones de la evaluacion",
+            resultado.get(
+                "limitaciones", []
+            ),
+        )
+
+
+# ============================================================
+# EXPORTAR RESULTADO
+# ============================================================
+
+def exportar_analisis(expediente, resultado):
+
+    st.subheader(
+        "08. Descargar informe de evaluacion"
+    )
+
+    oportunidad = expediente.get(
+        "oportunidad", {}
+    )
+
+    informe = {
+        "organizacion": "INTILED SAS BIC",
+        "plataforma": "INTI Projects Enterprise",
+        "motor": "Google Gemini",
+        "expediente_id": expediente["id"],
+        "fecha_exportacion": fecha_actual(),
+        "convocatoria": oportunidad,
+        "analisis": resultado,
+        "advertencia": (
+            "Evaluacion preliminar asistida por IA. "
+            "Requiere validacion humana y documental."
+        ),
+    }
+
+    contenido = json.dumps(
+        informe,
+        ensure_ascii=False,
+        indent=2,
+        default=str,
+    )
+
+    archivo = (
+        "INTILED_Analisis_"
+        + codigo_seguro(expediente["id"])
+        + ".json"
+    )
+
+    st.download_button(
+        "Descargar informe de viabilidad",
+        data=contenido,
+        file_name=archivo,
+        mime="application/json",
+        use_container_width=True,
+        key=(
+            "inti_ai_descargar_"
+            + codigo_seguro(
+                expediente["id"]
+            )
+        ),
+    )
+
+    st.caption(
+        "El archivo JSON contiene la "
+        "evaluacion estructurada. "
+        "No es una propuesta contractual "
+        "ni reemplaza los soportes originales."
+    )
+
+
+# ============================================================
+# MOSTRAR RESULTADO DEL EXPEDIENTE
+# ============================================================
+
+def mostrar_analisis_guardado(expediente):
+
+    resultado = cargar_resultado()
+
+    if resultado is None:
+
+        st.info(
+            "Esta convocatoria todavia "
+            "no tiene un analisis de Gemini. "
+            "Presiona el boton Analizar "
+            "viabilidad con Gemini."
+        )
+
+        return
+
+    st.divider()
+
+    mostrar_decision(resultado)
+
+    mostrar_componentes(resultado)
+
+    mostrar_plan_accion(resultado)
+
+    mostrar_fuentes(resultado)
+
+    exportar_analisis(
+        expediente,
+        resultado,
+    )
+
+
+# ============================================================
+# FUNCION PRINCIPAL
 # ============================================================
 
 def mostrar_analisis_intiled():
 
     iniciar_workspace()
+
     sincronizar_legacy()
 
-    estilos_analisis()
+    estilos_intiled()
+
     mostrar_encabezado()
 
-    if not selector_expedientes():
-        return
-
-    expediente = oportunidad_activa()
+    expediente = seleccionar_convocatoria()
 
     if expediente is None:
         return
 
-    identificador = expediente["id"]
+    mostrar_convocatoria(expediente)
 
-    ficha_convocatoria(expediente)
+    mostrar_documentos(expediente)
 
-    st.markdown(
-        '<div class="inti-analysis-heading">'
-        '03. Evaluación de requisitos'
-        '</div>',
-        unsafe_allow_html=True,
+    ejecutar_analisis(expediente)
+
+    mostrar_analisis_guardado(
+        expediente
     )
-
-    st.caption(
-        "Cada evaluación queda asociada al "
-        "identificador de la convocatoria activa."
-    )
-
-    tabs = st.tabs([
-        "Técnico",
-        "Jurídico",
-        "Financiero",
-        "Comercial",
-    ])
-
-    with tabs[0]:
-        evaluacion_tecnica(identificador)
-
-    with tabs[1]:
-        evaluacion_juridica(identificador)
-
-    with tabs[2]:
-        evaluacion_financiera(identificador)
-
-    with tabs[3]:
-        evaluacion_comercial(identificador)
-
-    seccion_decision(identificador)
-
-    with st.expander(
-        "Consultar historial y resumen",
-        expanded=False,
-    ):
-        seccion_historial()
-        resumen_general()
 
     st.divider()
 
     st.caption(
-        "INTI Projects Enterprise · "
-        "INTILED SAS BIC · "
-        "Evaluación preliminar por expediente."
+        "INTI Projects Enterprise | "
+        "INTILED SAS BIC | "
+        "Analisis de viabilidad con Google Gemini"
     )
 
 
-# Alias para compatibilidad con nombres
-# alternativos utilizados en app.py.
+# ============================================================
+# ALIAS DE COMPATIBILIDAD
+# ============================================================
 
 def mostrar_analisis():
     return mostrar_analisis_intiled()
