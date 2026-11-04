@@ -1,1627 +1,1155 @@
-import streamlit as st
+
+# ============================================================
+# INTI PROJECTS ENTERPRISE
+# INTILED SAS BIC
+#
+# Archivo: modules/analyzer.py
+# Analizador documental por convocatoria
+# ============================================================
+
+import hashlib
+import io
+import re
+from copy import deepcopy
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from services.document_analyzer import analizar_documentos
+import streamlit as st
 
-
-# ============================================================
-# INTI PROJECTS AI
-# ANALIZADOR DOCUMENTAL
-# ============================================================
-#
-# FLUJO:
-#
-# Convocatoria seleccionada
-#       ↓
-# Fuente oficial
-#       ↓
-# Carga de TDR / pliegos / anexos
-#       ↓
-# Motor document_analyzer.py
-#       ↓
-# Extracción de requisitos
-#       ↓
-# Cobertura documental
-#       ↓
-# Resultado consolidado
-#       ↓
-# Análisis INTILED / Estructuración
-#
-# ============================================================
+from services.opportunity_workspace import (
+    iniciar_workspace,
+    listar_oportunidades,
+    oportunidad_activa,
+    activar_oportunidad,
+    sincronizar_legacy,
+    guardar_datos_modulo,
+    obtener_datos_modulo,
+    registrar_evento,
+)
 
 
 # ============================================================
-# FUNCIONES AUXILIARES
+# CONFIGURACIÓN
 # ============================================================
 
-def obtener_valor(
-    oportunidad,
-    campo,
-    default="No informado"
-):
+MODULO = "analizador_documental"
 
-    valor = oportunidad.get(campo)
+ZONA = ZoneInfo("America/Bogota")
 
-    if valor is None or valor == "":
-        return default
+MAX_ARCHIVO_MB = 15
+MAX_PAGINAS_PDF = 80
+MAX_CARACTERES = 100000
 
-    return valor
+TIPOS_DOCUMENTO = [
+    "Pliego de condiciones",
+    "Términos de referencia",
+    "Anexo técnico",
+    "Ficha técnica",
+    "Adenda",
+    "Documento jurídico",
+    "Documento financiero",
+    "Otro documento",
+]
+
+ESTADOS_REVISION = [
+    "Pendiente de verificar",
+    "Cumple - verificado",
+    "No cumple - verificado",
+    "No aplica",
+]
+
+CATEGORIAS_REVISION = {
+    "Experiencia": [
+        r"\bexperiencia\b",
+        r"\bcontratos ejecutados\b",
+        r"\bcontratos similares\b",
+    ],
+    "Requisitos jurídicos": [
+        r"\brepresentante legal\b",
+        r"\bexistencia y representacion\b",
+        r"\bregistro unico\b",
+        r"\bcapacidad juridica\b",
+    ],
+    "Capacidad financiera": [
+        r"\bliquidez\b",
+        r"\bendeudamiento\b",
+        r"\bcapital de trabajo\b",
+        r"\bindicadores financieros\b",
+    ],
+    "Especificaciones técnicas": [
+        r"\bespecificaciones tecnicas\b",
+        r"\bluminarias\b",
+        r"\bfotovoltaico\b",
+        r"\bpotencia\b",
+        r"\bautonomia\b",
+    ],
+    "Garantías": [
+        r"\bgarantia\b",
+        r"\bpoliza\b",
+        r"\bseriedad de la oferta\b",
+    ],
+    "Plazos": [
+        r"\bplazo de ejecucion\b",
+        r"\bfecha de cierre\b",
+        r"\bcronograma\b",
+        r"\bplazo contractual\b",
+    ],
+    "Alianzas": [
+        r"\bconsorcio\b",
+        r"\bunion temporal\b",
+        r"\bproponente plural\b",
+    ],
+}
+
+CHECKLIST = [
+    "Experiencia contractual",
+    "Capacidad jurídica",
+    "Capacidad financiera",
+    "Especificaciones técnicas",
+    "Garantías y pólizas",
+    "Cronograma y plazo",
+    "Documentación habilitante",
+    "Modalidad de participación",
+]
 
 
-def obtener_clave_oportunidad(
-    oportunidad
-):
+# ============================================================
+# UTILIDADES
+# ============================================================
 
-    return str(
-        oportunidad.get("referencia")
-        or oportunidad.get("id_proceso")
-        or oportunidad.get("id")
-        or oportunidad.get("titulo")
-        or "oportunidad_intiled"
+def fecha_actual():
+    return datetime.now(ZONA).isoformat(
+        timespec="seconds"
     )
 
 
-def normalizar_url(url):
-
-    if not url:
-        return ""
-
-    # Algunos resultados pueden traer
-    # la URL dentro de un diccionario.
-    if isinstance(url, dict):
-
-        url = (
-            url.get("url")
-            or url.get("href")
-            or url.get("link")
-            or ""
-        )
-
-    if not isinstance(url, str):
-
-        try:
-            url = str(url)
-
-        except Exception:
-            return ""
-
-    url = url.strip()
-
-    if not (
-        url.startswith("http://")
-        or url.startswith("https://")
-    ):
-        return ""
-
-    return url
+def clave_segura(texto):
+    return hashlib.sha256(
+        str(texto).encode("utf-8")
+    ).hexdigest()[:16]
 
 
-def obtener_url_oportunidad(
-    oportunidad
-):
-
-    posibles_campos = [
-        "url",
-        "URL",
-        "link",
-        "enlace",
-        "url_proceso",
-        "urlproceso",
-        "urlProceso"
-    ]
-
-    for campo in posibles_campos:
-
-        url = normalizar_url(
-            oportunidad.get(campo)
-        )
-
-        if url:
-            return url
-
-    return ""
+def limpiar_texto(texto):
+    texto = str(texto or "")
+    texto = re.sub(r"[ \t]+", " ", texto)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    return texto.strip()
 
 
-# ============================================================
-# INICIALIZAR REGISTRO DOCUMENTAL
-# ============================================================
+def normalizar_busqueda(texto):
+    import unicodedata
 
-def inicializar_analisis_documental(
-    oportunidad
-):
-
-    clave = obtener_clave_oportunidad(
-        oportunidad
+    texto = unicodedata.normalize(
+        "NFKD", str(texto or "").lower()
     )
 
-    if (
-        "analisis_documentales"
-        not in st.session_state
-    ):
+    return "".join(
+        caracter
+        for caracter in texto
+        if not unicodedata.combining(caracter)
+    )
 
-        st.session_state[
-            "analisis_documentales"
-        ] = {}
 
-    registros = st.session_state[
-        "analisis_documentales"
-    ]
+def datos_iniciales():
+    return {
+        "version": 1,
+        "documentos": {},
+        "verificaciones": {},
+        "observaciones_generales": "",
+        "actualizado": fecha_actual(),
+    }
 
-    if clave not in registros:
 
-        registros[clave] = {
+def cargar_datos():
+    datos = obtener_datos_modulo(
+        MODULO,
+        defecto=None,
+    )
 
-            "id":
-                clave,
+    if not isinstance(datos, dict):
+        return datos_iniciales()
 
-            "fecha_creacion":
-                datetime.now().isoformat(),
+    resultado = deepcopy(datos)
+    resultado.setdefault("documentos", {})
+    resultado.setdefault("verificaciones", {})
+    resultado.setdefault(
+        "observaciones_generales", ""
+    )
+    resultado.setdefault(
+        "actualizado", fecha_actual()
+    )
+    return resultado
 
-            "ultima_actualizacion":
-                datetime.now().isoformat(),
 
-            "estado":
-                "SIN DOCUMENTOS",
+def guardar_datos(datos, accion):
+    expediente = oportunidad_activa()
 
-            "oportunidad":
-                oportunidad,
+    if expediente is None:
+        return False
 
-            # Metadata de los documentos
-            "documentos":
-                [],
+    copia = deepcopy(datos)
+    copia["actualizado"] = fecha_actual()
 
-            # Resultados del motor documental
-            "resultado":
-                {},
+    correcto = guardar_datos_modulo(
+        MODULO, copia
+    )
 
-            "cobertura":
-                {},
+    if correcto:
+        registrar_evento(
+            expediente["id"], accion
+        )
 
-            "porcentaje_analisis":
-                0,
+    return correcto
 
-            "errores":
-                [],
 
-            # Posteriormente se llenarán
-            # con requirements_engine.py
-            "requisitos":
-                [],
+# ============================================================
+# ESTILO CORPORATIVO
+# ============================================================
 
-            "fortalezas":
-                [],
-
-            "brechas":
-                [],
-
-            "bid_score":
-                None,
-
-            "decision":
-                None
+def estilos():
+    st.markdown(
+        """
+        <style>
+        .inti-doc-hero {
+            background: linear-gradient(
+                115deg, #202630, #303A48
+            );
+            padding: 32px 35px;
+            border-radius: 18px;
+            margin-bottom: 24px;
         }
 
-    registros[
-        clave
-    ][
-        "oportunidad"
-    ] = oportunidad
+        .inti-doc-eyebrow {
+            color: #FFAD72;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            margin-bottom: 12px;
+        }
 
-    return registros[
-        clave
+        .inti-doc-title {
+            color: #FFFFFF;
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+
+        .inti-doc-description {
+            color: #D2D9E3;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .inti-doc-section {
+            color: #242C39;
+            font-size: 21px;
+            font-weight: 750;
+            margin: 25px 0 14px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def encabezado():
+    st.markdown(
+        """
+        <div class="inti-doc-hero">
+            <div class="inti-doc-eyebrow">
+                INTILED SAS BIC · GESTIÓN DOCUMENTAL
+            </div>
+            <div class="inti-doc-title">
+                Analizador de documentos
+            </div>
+            <div class="inti-doc-description">
+                Organiza los pliegos, anexos y documentos
+                técnicos de cada convocatoria. Identifica
+                apartados relevantes y registra las
+                verificaciones del expediente activo.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def titulo_seccion(texto):
+    import html
+
+    st.markdown(
+        '<div class="inti-doc-section">'
+        + html.escape(texto)
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# SELECCIÓN DEL EXPEDIENTE
+# ============================================================
+
+def seleccionar_expediente():
+    expedientes = listar_oportunidades()
+
+    if not expedientes:
+        st.info(
+            "Aún no tienes convocatorias guardadas. "
+            "Guarda una oportunidad en el Radar "
+            "para comenzar."
+        )
+        return None
+
+    activo = oportunidad_activa()
+
+    opciones = [
+        expediente["id"]
+        for expediente in expedientes
     ]
 
+    etiquetas = {
+        expediente["id"]: (
+            str(
+                expediente["oportunidad"].get(
+                    "codigo", "Sin código"
+                )
+            )
+            + " · "
+            + str(
+                expediente["oportunidad"].get(
+                    "titulo", "Sin título"
+                )
+            )[:85]
+        )
+        for expediente in expedientes
+    }
 
-# ============================================================
-# ENCABEZADO
-# ============================================================
-
-def mostrar_encabezado(
-    oportunidad
-):
-
-    st.title(
-        "📑 Analizador de Documentos"
+    posicion = (
+        opciones.index(activo["id"])
+        if activo and activo["id"] in opciones
+        else 0
     )
 
-    st.caption(
-        "Lectura y análisis de TDR, pliegos, "
-        "estudios previos, anexos técnicos, "
-        "presupuestos y demás documentos "
-        "de la convocatoria."
+    titulo_seccion(
+        "01. Seleccionar convocatoria"
     )
 
-    st.divider()
-
-    st.markdown(
-        "### 🎯 Convocatoria seleccionada"
-    )
-
-    titulo = obtener_valor(
-        oportunidad,
-        "titulo",
-        "Oportunidad sin título"
-    )
-
-    st.markdown(
-        f"#### {titulo}"
-    )
-
-    col1, col2, col3 = st.columns(
-        3
-    )
+    col1, col2 = st.columns([3, 1])
 
     with col1:
-
-        st.write(
-            "**Entidad**"
-        )
-
-        st.write(
-            obtener_valor(
-                oportunidad,
-                "entidad"
-            )
+        elegido = st.selectbox(
+            "Expediente",
+            opciones,
+            index=posicion,
+            format_func=lambda valor: etiquetas.get(
+                valor, valor
+            ),
+            key=(
+                "inti_docs_selector_"
+                + clave_segura(
+                    activo["id"] if activo else "none"
+                )
+            ),
         )
 
     with col2:
+        st.write("")
+        st.write("")
 
-        st.write(
-            "**Referencia**"
+        if st.button(
+            "Activar",
+            type="primary",
+            use_container_width=True,
+            key="inti_docs_activar",
+        ):
+            activar_oportunidad(elegido)
+            st.rerun()
+
+    if activo is None:
+        st.warning(
+            "Selecciona una convocatoria "
+            "y presiona Activar."
         )
+        return None
 
-        st.write(
-            obtener_valor(
-                oportunidad,
-                "referencia"
+    oportunidad = activo["oportunidad"]
+
+    with st.container(border=True):
+        st.markdown(
+            "**Convocatoria activa:** "
+            + str(
+                oportunidad.get("titulo")
+                or "Sin título"
             )
         )
 
-    with col3:
-
-        st.write(
-            "**Fuente**"
-        )
-
-        st.write(
-            obtener_valor(
-                oportunidad,
-                "fuente"
+        st.caption(
+            "Entidad: "
+            + str(
+                oportunidad.get("entidad")
+                or "No informada"
+            )
+            + " · Código: "
+            + str(
+                oportunidad.get("codigo")
+                or "No informado"
             )
         )
 
-    col4, col5, col6 = st.columns(
-        3
-    )
-
-    with col4:
-
-        st.write(
-            "**Presupuesto**"
-        )
-
-        st.write(
-            obtener_valor(
-                oportunidad,
-                "valor"
-            )
-        )
-
-    with col5:
-
-        st.write(
-            "**Modalidad**"
-        )
-
-        st.write(
-            obtener_valor(
-                oportunidad,
-                "modalidad"
-            )
-        )
-
-    with col6:
-
-        st.write(
-            "**Fecha de cierre**"
-        )
-
-        st.write(
-            obtener_valor(
-                oportunidad,
-                "fecha_cierre"
-            )
-        )
+    return activo
 
 
 # ============================================================
-# FUENTE OFICIAL
+# EXTRAER TEXTO DE DOCUMENTOS
 # ============================================================
 
-def mostrar_fuente_oficial(
-    oportunidad
-):
-
-    st.subheader(
-        "🌐 Fuente oficial"
-    )
-
-    url = obtener_url_oportunidad(
-        oportunidad
-    )
-
-    if url:
-
-        st.write(
-            "Consulta la convocatoria directamente "
-            "en la fuente donde fue detectada."
+def extraer_pdf(contenido):
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        raise RuntimeError(
+            "Falta instalar pypdf en requirements.txt."
         )
 
-        st.link_button(
-            "🌐 Abrir convocatoria oficial",
-            url,
-            use_container_width=True
+    lector = PdfReader(
+        io.BytesIO(contenido)
+    )
+
+    textos = []
+    paginas = min(
+        len(lector.pages),
+        MAX_PAGINAS_PDF,
+    )
+
+    for numero in range(paginas):
+        try:
+            texto = (
+                lector.pages[numero].extract_text()
+                or ""
+            )
+        except Exception:
+            texto = ""
+
+        textos.append(
+            f"\n[Página {numero + 1}]\n{texto}"
         )
 
+    return "\n".join(textos), {
+        "paginas_totales": len(lector.pages),
+        "paginas_procesadas": paginas,
+        "procesamiento_parcial": (
+            paginas < len(lector.pages)
+        ),
+    }
+
+
+def extraer_word(contenido):
+    try:
+        from docx import Document
+    except ImportError:
+        raise RuntimeError(
+            "Falta instalar python-docx "
+            "en requirements.txt."
+        )
+
+    documento = Document(
+        io.BytesIO(contenido)
+    )
+
+    textos = [
+        parrafo.text
+        for parrafo in documento.paragraphs
+        if parrafo.text.strip()
+    ]
+
+    for tabla in documento.tables:
+        for fila in tabla.rows:
+            contenido_fila = " | ".join(
+                celda.text
+                for celda in fila.cells
+            )
+            textos.append(contenido_fila)
+
+    return "\n".join(textos), {
+        "procesamiento_parcial": False
+    }
+
+
+def extraer_txt(contenido):
+    try:
+        return contenido.decode(
+            "utf-8-sig"
+        ), {
+            "procesamiento_parcial": False
+        }
+    except UnicodeDecodeError:
+        return contenido.decode(
+            "latin-1"
+        ), {
+            "procesamiento_parcial": False
+        }
+
+
+def procesar_archivo(archivo, tipo):
+    contenido = archivo.getvalue()
+
+    if len(contenido) > MAX_ARCHIVO_MB * 1024 * 1024:
+        raise ValueError(
+            f"El documento supera {MAX_ARCHIVO_MB} MB."
+        )
+
+    extension = archivo.name.lower().rsplit(
+        ".", 1
+    )[-1]
+
+    if extension == "pdf":
+        texto, metadata = extraer_pdf(contenido)
+    elif extension == "docx":
+        texto, metadata = extraer_word(contenido)
+    elif extension == "txt":
+        texto, metadata = extraer_txt(contenido)
     else:
-
-        st.info(
-            "Esta oportunidad no contiene todavía "
-            "un enlace directo utilizable hacia "
-            "la convocatoria oficial."
+        raise ValueError(
+            "Formato no admitido."
         )
+
+    texto = limpiar_texto(texto)
+
+    truncado = len(texto) > MAX_CARACTERES
+
+    if truncado:
+        texto = texto[:MAX_CARACTERES]
+
+    metadata["texto_truncado"] = truncado
+
+    huella = hashlib.sha256(
+        contenido
+    ).hexdigest()
+
+    return {
+        "id": huella[:24],
+        "nombre": archivo.name,
+        "tipo": tipo,
+        "extension": extension,
+        "tamano_bytes": len(contenido),
+        "fecha_carga": fecha_actual(),
+        "texto": texto,
+        "metadata": metadata,
+        "hallazgos": detectar_apartados(texto),
+        "observaciones": "",
+    }
 
 
 # ============================================================
-# GUÍA DOCUMENTAL
+# DETECCIÓN PRELIMINAR DE APARTADOS
 # ============================================================
 
-def mostrar_guia_documental():
-
-    st.subheader(
-        "📚 Documentación del proceso"
+def detectar_apartados(texto):
+    texto_normalizado = normalizar_busqueda(
+        texto
     )
 
-    st.write(
-        "Puedes cargar varios documentos de la misma "
-        "convocatoria. INTI los analizará como un "
-        "expediente documental conjunto."
-    )
+    hallazgos = {}
 
-    col1, col2, col3 = st.columns(
-        3
-    )
+    for categoria, patrones in (
+        CATEGORIAS_REVISION.items()
+    ):
+        coincidencias = []
 
-    with col1:
+        for patron in patrones:
+            for match in re.finditer(
+                patron,
+                texto_normalizado,
+                flags=re.IGNORECASE,
+            ):
+                inicio = max(
+                    0, match.start() - 130
+                )
+                final = min(
+                    len(texto),
+                    match.end() + 230,
+                )
 
-        st.info(
-            "### 📘 Principal\n\n"
-            "• TDR\n"
-            "• Pliego de condiciones\n"
-            "• Solicitud de ofertas\n"
-            "• Invitación"
-        )
+                fragmento = texto[
+                    inicio:final
+                ].strip()
 
-    with col2:
+                if fragmento:
+                    coincidencias.append(fragmento)
 
-        st.info(
-            "### 📐 Técnico\n\n"
-            "• Estudios previos\n"
-            "• Anexos técnicos\n"
-            "• Especificaciones\n"
-            "• Fichas técnicas"
-        )
+                if len(coincidencias) >= 5:
+                    break
 
-    with col3:
+            if len(coincidencias) >= 5:
+                break
 
-        st.info(
-            "### 💰 Complementario\n\n"
-            "• Presupuesto\n"
-            "• Cronograma\n"
-            "• Formularios\n"
-            "• Adendas"
-        )
+        if coincidencias:
+            hallazgos[categoria] = coincidencias
+
+    return hallazgos
 
 
 # ============================================================
-# CARGADOR DE DOCUMENTOS
+# SUBIR DOCUMENTOS
 # ============================================================
 
-def mostrar_cargador(
-    oportunidad,
-    analisis
-):
-
-    st.subheader(
-        "📤 Cargar documentos"
+def seccion_cargar(expediente):
+    titulo_seccion(
+        "02. Incorporar documentos"
     )
 
-    st.write(
-        "Selecciona los documentos oficiales "
-        "que deseas analizar."
+    identificador = clave_segura(
+        expediente["id"]
     )
 
-    clave = obtener_clave_oportunidad(
-        oportunidad
+    tipo = st.selectbox(
+        "Tipo de documento",
+        TIPOS_DOCUMENTO,
+        key=f"inti_docs_tipo_{identificador}",
     )
 
     archivos = st.file_uploader(
-        "TDR, pliegos, anexos y documentos complementarios",
-        type=[
-            "pdf",
-            "docx",
-            "xlsx"
-        ],
+        "Seleccionar archivos",
+        type=["pdf", "docx", "txt"],
         accept_multiple_files=True,
-        key=f"uploader_documentos_{clave}"
+        key=f"inti_docs_archivos_{identificador}",
     )
 
     st.caption(
-        "Formatos soportados actualmente: "
-        "PDF, DOCX y XLSX."
-    )
-
-    # Guardamos los objetos UploadedFile
-    # temporalmente en session_state.
-    #
-    # NO los almacenamos dentro del registro
-    # documental definitivo.
-    if archivos:
-
-        st.session_state[
-            f"archivos_temporales_{clave}"
-        ] = archivos
-
-        st.success(
-            f"📎 {len(archivos)} documento(s) "
-            "seleccionado(s)."
-        )
-
-        for indice, archivo in enumerate(
-            archivos,
-            start=1
-        ):
-
-            col1, col2 = st.columns(
-                [4, 1]
-            )
-
-            with col1:
-
-                st.write(
-                    f"📄 {indice}. {archivo.name}"
-                )
-
-            with col2:
-
-                mb = archivo.size / (
-                    1024 * 1024
-                )
-
-                st.caption(
-                    f"{mb:.2f} MB"
-                )
-
-        if st.button(
-            "💾 Asociar documentos a la convocatoria",
-            type="primary",
-            use_container_width=True,
-            key=f"asociar_documentos_{clave}"
-        ):
-
-            documentos = []
-
-            for archivo in archivos:
-
-                documentos.append({
-
-                    "nombre":
-                        archivo.name,
-
-                    "tipo_mime":
-                        archivo.type,
-
-                    "tamano":
-                        archivo.size,
-
-                    "fecha_carga":
-                        datetime.now().isoformat(),
-
-                    "estado":
-                        "PENDIENTE_ANALISIS"
-                })
-
-            analisis[
-                "documentos"
-            ] = documentos
-
-            analisis[
-                "estado"
-            ] = "DOCUMENTOS CARGADOS"
-
-            analisis[
-                "ultima_actualizacion"
-            ] = datetime.now().isoformat()
-
-            # Si asociamos nuevos documentos,
-            # invalidamos el análisis anterior.
-            analisis[
-                "resultado"
-            ] = {}
-
-            analisis[
-                "cobertura"
-            ] = {}
-
-            analisis[
-                "porcentaje_analisis"
-            ] = 0
-
-            analisis[
-                "errores"
-            ] = []
-
-            analisis[
-                "bid_score"
-            ] = None
-
-            analisis[
-                "decision"
-            ] = None
-
-            st.success(
-                "✅ Documentos asociados "
-                "correctamente."
-            )
-
-            st.rerun()
-
-    else:
-
-        archivos_guardados = (
-            st.session_state.get(
-                f"archivos_temporales_{clave}",
-                []
-            )
-        )
-
-        if archivos_guardados:
-
-            st.caption(
-                "INTI mantiene temporalmente los "
-                "archivos seleccionados durante "
-                "esta sesión."
-            )
-
-    return archivos
-
-
-# ============================================================
-# DOCUMENTOS ASOCIADOS
-# ============================================================
-
-def mostrar_documentos_asociados(
-    analisis
-):
-
-    st.subheader(
-        "📂 Documentos asociados"
-    )
-
-    documentos = analisis.get(
-        "documentos",
-        []
-    )
-
-    if not documentos:
-
-        st.info(
-            "Todavía no existen documentos "
-            "asociados a esta convocatoria."
-        )
-
-        return
-
-    for indice, documento in enumerate(
-        documentos,
-        start=1
-    ):
-
-        with st.container(
-            border=True
-        ):
-
-            col1, col2, col3 = st.columns(
-                [4, 1, 1]
-            )
-
-            with col1:
-
-                st.write(
-                    f"**📄 {indice}. "
-                    f"{documento.get('nombre', 'Documento')}**"
-                )
-
-                categoria = documento.get(
-                    "categoria"
-                )
-
-                if categoria:
-
-                    st.caption(
-                        f"Clasificación INTI: {categoria}"
-                    )
-
-            with col2:
-
-                tamano = documento.get(
-                    "tamano",
-                    0
-                )
-
-                if tamano:
-
-                    mb = tamano / (
-                        1024 * 1024
-                    )
-
-                    st.write(
-                        f"{mb:.2f} MB"
-                    )
-
-                else:
-
-                    st.write(
-                        "—"
-                    )
-
-            with col3:
-
-                estado = documento.get(
-                    "estado",
-                    "PENDIENTE_ANALISIS"
-                )
-
-                if estado == "ANALIZADO":
-
-                    st.success(
-                        "Analizado"
-                    )
-
-                elif estado == "ERROR":
-
-                    st.error(
-                        "Error"
-                    )
-
-                else:
-
-                    st.warning(
-                        "Pendiente"
-                    )
-
-
-# ============================================================
-# PREPARAR ARCHIVOS PARA EL MOTOR
-# ============================================================
-
-def preparar_archivos_para_analisis(
-    oportunidad
-):
-
-    clave = obtener_clave_oportunidad(
-        oportunidad
-    )
-
-    archivos = st.session_state.get(
-        f"archivos_temporales_{clave}",
-        []
-    )
-
-    documentos_motor = []
-
-    for archivo in archivos:
-
-        try:
-
-            bytes_archivo = (
-                archivo.getvalue()
-            )
-
-            documentos_motor.append({
-
-                "nombre":
-                    archivo.name,
-
-                "tipo_mime":
-                    archivo.type,
-
-                "tamano":
-                    archivo.size,
-
-                # Los bytes solamente se usan
-                # durante el análisis.
-                "bytes":
-                    bytes_archivo
-            })
-
-        except Exception:
-
-            continue
-
-    return documentos_motor
-
-
-# ============================================================
-# EJECUTAR ANÁLISIS
-# ============================================================
-
-def mostrar_accion_analisis(
-    oportunidad,
-    analisis
-):
-
-    st.subheader(
-        "🧠 Análisis documental INTI"
-    )
-
-    documentos = analisis.get(
-        "documentos",
-        []
-    )
-
-    if not documentos:
-
-        st.warning(
-            "Primero debes cargar y asociar "
-            "al menos un documento."
-        )
-
-        st.button(
-            "🧠 Analizar documentos con INTI",
-            disabled=True,
-            use_container_width=True,
-            key="analizar_documentos_deshabilitado"
-        )
-
-        return
-
-    documentos_motor = (
-        preparar_archivos_para_analisis(
-            oportunidad
-        )
-    )
-
-    if not documentos_motor:
-
-        st.warning(
-            "Los documentos están registrados, "
-            "pero INTI ya no tiene acceso temporal "
-            "a los archivos originales."
-        )
-
-        st.write(
-            "Vuelve a seleccionar los archivos "
-            "en el cargador antes de ejecutar "
-            "el análisis."
-        )
-
-        return
-
-    st.write(
-        "INTI leerá los documentos y localizará "
-        "información contractual, técnica, económica "
-        "y habilitante."
-    )
-
-    st.caption(
-        "En esta etapa INTI extrae evidencia textual. "
-        "Todavía no determina automáticamente que "
-        "INTILED cumpla un requisito."
-    )
-
-    clave = obtener_clave_oportunidad(
-        oportunidad
+        "Se extrae texto para revisión. "
+        "Los PDF escaneados sin capa de texto "
+        "no se interpretan automáticamente."
     )
 
     if st.button(
-        "🧠 Analizar documentos con INTI",
+        "Incorporar al expediente",
         type="primary",
         use_container_width=True,
-        key=f"analizar_documentos_{clave}"
+        key=f"inti_docs_subir_{identificador}",
     ):
+        if not archivos:
+            st.warning(
+                "Selecciona al menos un archivo."
+            )
+            return
 
-        with st.spinner(
-            "INTI está leyendo y analizando "
-            "los documentos..."
+        if (
+            oportunidad_activa() is None
+            or oportunidad_activa()["id"]
+            != expediente["id"]
         ):
+            st.error(
+                "Cambió el expediente activo. "
+                "Vuelve a seleccionarlo."
+            )
+            return
 
+        datos = cargar_datos()
+
+        agregados = 0
+        duplicados = 0
+        errores = []
+
+        for archivo in archivos:
             try:
-
-                resultado_motor = (
-                    analizar_documentos(
-                        documentos_motor
-                    )
+                documento = procesar_archivo(
+                    archivo, tipo
                 )
 
-                # ============================================
-                # RESULTADOS
-                # ============================================
-
-                analisis[
-                    "resultado"
-                ] = resultado_motor.get(
-                    "resultado",
-                    {}
-                )
-
-                analisis[
-                    "cobertura"
-                ] = resultado_motor.get(
-                    "cobertura",
-                    {}
-                )
-
-                analisis[
-                    "porcentaje_analisis"
-                ] = resultado_motor.get(
-                    "porcentaje_analisis",
-                    0
-                )
-
-                analisis[
-                    "errores"
-                ] = resultado_motor.get(
-                    "errores",
-                    []
-                )
-
-                analisis[
-                    "estado"
-                ] = "ANALIZADO"
-
-                analisis[
-                    "ultima_actualizacion"
-                ] = datetime.now().isoformat()
-
-                # ============================================
-                # ACTUALIZAR METADATA DE DOCUMENTOS
-                # ============================================
-
-                documentos_analizados = (
-                    resultado_motor.get(
-                        "documentos",
-                        []
-                    )
-                )
-
-                metadata_actualizada = []
-
-                for documento in documentos_analizados:
-
-                    metadata_actualizada.append({
-
-                        "nombre":
-                            documento.get(
-                                "nombre",
-                                ""
-                            ),
-
-                        "tipo_mime":
-                            documento.get(
-                                "tipo_mime",
-                                ""
-                            ),
-
-                        "tamano":
-                            documento.get(
-                                "tamano",
-                                0
-                            ),
-
-                        "categoria":
-                            documento.get(
-                                "categoria",
-                                "OTRO"
-                            ),
-
-                        "caracteres":
-                            documento.get(
-                                "caracteres",
-                                0
-                            ),
-
-                        "fecha_analisis":
-                            documento.get(
-                                "fecha_analisis",
-                                datetime.now().isoformat()
-                            ),
-
-                        "estado":
-                            "ANALIZADO"
-                    })
-
-                # Si un archivo produjo error,
-                # también lo mostramos.
-                nombres_analizados = {
-                    documento.get("nombre")
-                    for documento
-                    in metadata_actualizada
-                }
-
-                for documento_original in documentos:
-
-                    nombre = documento_original.get(
-                        "nombre"
-                    )
-
-                    if (
-                        nombre
-                        not in nombres_analizados
-                    ):
-
-                        metadata_actualizada.append({
-
-                            **documento_original,
-
-                            "estado":
-                                "ERROR"
-                        })
-
-                analisis[
+                if documento["id"] in datos[
                     "documentos"
-                ] = metadata_actualizada
+                ]:
+                    duplicados += 1
+                    continue
 
-                st.success(
-                    "✅ INTI completó el análisis "
-                    "documental."
+                datos["documentos"][
+                    documento["id"]
+                ] = documento
+
+                agregados += 1
+
+            except Exception as error:
+                errores.append(
+                    f"{archivo.name}: {error}"
+                )
+
+        if agregados:
+            guardar_datos(
+                datos,
+                f"Se incorporaron {agregados} "
+                "documentos al expediente",
+            )
+
+            st.success(
+                f"{agregados} documento(s) "
+                "incorporado(s) correctamente."
+            )
+
+        if duplicados:
+            st.info(
+                f"{duplicados} documento(s) "
+                "ya estaban guardados."
+            )
+
+        for error in errores:
+            st.error(error)
+
+        if agregados:
+            st.rerun()
+
+
+# ============================================================
+# CONSULTAR DOCUMENTOS
+# ============================================================
+
+def seccion_documentos(expediente):
+    titulo_seccion(
+        "03. Documentos del expediente"
+    )
+
+    datos = cargar_datos()
+    documentos = datos["documentos"]
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Documentos",
+        len(documentos),
+    )
+
+    c2.metric(
+        "Con texto extraído",
+        sum(
+            bool(doc.get("texto"))
+            for doc in documentos.values()
+        ),
+    )
+
+    c3.metric(
+        "Apartados identificados",
+        sum(
+            len(doc.get("hallazgos", {}))
+            for doc in documentos.values()
+        ),
+    )
+
+    if not documentos:
+        st.info(
+            "Aún no se han incorporado "
+            "documentos a esta convocatoria."
+        )
+        return
+
+    for documento_id, documento in (
+        documentos.items()
+    ):
+        with st.expander(
+            documento["nombre"],
+            expanded=False,
+        ):
+            st.write(
+                "**Tipo:** "
+                + documento["tipo"]
+            )
+
+            st.write(
+                "**Fecha de incorporación:** "
+                + documento["fecha_carga"]
+            )
+
+            st.write(
+                "**Caracteres extraídos:** "
+                + str(
+                    len(documento.get("texto", ""))
+                )
+            )
+
+            metadata = documento.get(
+                "metadata", {}
+            )
+
+            if metadata.get(
+                "procesamiento_parcial"
+            ):
+                st.warning(
+                    "Solo se procesó parte del PDF."
+                )
+
+            if metadata.get(
+                "texto_truncado"
+            ):
+                st.warning(
+                    "El texto se limitó a "
+                    f"{MAX_CARACTERES} caracteres."
+                )
+
+            if not documento.get("texto"):
+                st.warning(
+                    "No se extrajo texto legible. "
+                    "Puede ser un PDF escaneado."
+                )
+
+            st.markdown(
+                "#### Apartados identificados"
+            )
+
+            hallazgos = documento.get(
+                "hallazgos", {}
+            )
+
+            if not hallazgos:
+                st.info(
+                    "No se identificaron expresiones "
+                    "de las categorías configuradas. "
+                    "Esto no significa que el documento "
+                    "carezca de requisitos."
+                )
+
+            for categoria, fragmentos in (
+                hallazgos.items()
+            ):
+                st.markdown(
+                    f"**{categoria}**"
+                )
+
+                for fragmento in fragmentos:
+                    st.caption(fragmento)
+
+            texto = documento.get(
+                "texto", ""
+            )
+
+            if texto:
+                st.text_area(
+                    "Texto extraído",
+                    value=texto[:12000],
+                    height=220,
+                    disabled=True,
+                    key=(
+                        "inti_docs_texto_"
+                        + documento_id
+                    ),
+                )
+
+            confirmar = st.checkbox(
+                "Confirmo que deseo retirar "
+                "este documento del expediente",
+                key=(
+                    "inti_docs_confirmar_"
+                    + documento_id
+                ),
+            )
+
+            if st.button(
+                "Retirar documento",
+                disabled=not confirmar,
+                key=(
+                    "inti_docs_retirar_"
+                    + documento_id
+                ),
+            ):
+                datos_actuales = cargar_datos()
+
+                datos_actuales[
+                    "documentos"
+                ].pop(documento_id, None)
+
+                guardar_datos(
+                    datos_actuales,
+                    "Documento retirado: "
+                    + documento["nombre"],
                 )
 
                 st.rerun()
 
-            except Exception as error:
-
-                st.error(
-                    "❌ No fue posible completar "
-                    "el análisis documental."
-                )
-
-                st.exception(
-                    error
-                )
-
 
 # ============================================================
-# COBERTURA DOCUMENTAL
+# LISTA DE VERIFICACIÓN
 # ============================================================
 
-def mostrar_cobertura_documental(
-    analisis
-):
-
-    st.subheader(
-        "📊 Cobertura documental"
-    )
-
-    porcentaje = analisis.get(
-        "porcentaje_analisis",
-        0
-    )
-
-    porcentaje = max(
-        0,
-        min(
-            porcentaje,
-            100
-        )
-    )
-
-    st.progress(
-        porcentaje / 100
-    )
-
-    st.write(
-        f"**{porcentaje}% de los campos "
-        "contractuales principales fueron localizados.**"
-    )
-
-    cobertura = analisis.get(
-        "cobertura",
-        {}
-    )
-
-    controles = [
-        (
-            "Objeto contractual",
-            cobertura.get(
-                "objeto",
-                False
-            )
-        ),
-        (
-            "Presupuesto",
-            cobertura.get(
-                "presupuesto",
-                False
-            )
-        ),
-        (
-            "Plazo",
-            cobertura.get(
-                "plazo",
-                False
-            )
-        ),
-        (
-            "Experiencia",
-            cobertura.get(
-                "experiencia",
-                False
-            )
-        ),
-        (
-            "Personal mínimo",
-            cobertura.get(
-                "personal",
-                False
-            )
-        ),
-        (
-            "Requisitos financieros",
-            cobertura.get(
-                "financieros",
-                False
-            )
-        ),
-        (
-            "Especificaciones técnicas",
-            cobertura.get(
-                "especificaciones",
-                False
-            )
-        ),
-        (
-            "Factores de evaluación",
-            cobertura.get(
-                "factores_evaluacion",
-                False
-            )
-        ),
-        (
-            "Garantías",
-            cobertura.get(
-                "garantias",
-                False
-            )
-        ),
-        (
-            "Causales de rechazo",
-            cobertura.get(
-                "causales_rechazo",
-                False
-            )
-        )
-    ]
-
-    columnas = st.columns(
-        2
-    )
-
-    for indice, (
-        nombre,
-        encontrado
-    ) in enumerate(
-        controles
-    ):
-
-        with columnas[
-            indice % 2
-        ]:
-
-            if encontrado:
-
-                st.write(
-                    f"✅ {nombre}"
-                )
-
-            else:
-
-                st.write(
-                    f"⚪ {nombre}"
-                )
-
-    if porcentaje < 100:
-
-        st.info(
-            "⚪ Un campo no localizado no significa "
-            "necesariamente que no exista. Puede estar "
-            "en otro anexo, formulario o documento "
-            "que todavía no haya sido cargado."
-        )
-
-
-# ============================================================
-# ERRORES DOCUMENTALES
-# ============================================================
-
-def mostrar_errores(
-    analisis
-):
-
-    errores = analisis.get(
-        "errores",
-        []
-    )
-
-    if not errores:
-        return
-
-    st.subheader(
-        "⚠️ Incidencias de lectura"
-    )
-
-    for error in errores:
-
-        documento = error.get(
-            "documento",
-            "Documento"
-        )
-
-        mensaje = error.get(
-            "error",
-            "Error desconocido"
-        )
-
-        st.error(
-            f"**{documento}**\n\n"
-            f"{mensaje}"
-        )
-
-
-# ============================================================
-# RESULTADOS
-# ============================================================
-
-def mostrar_resultados(
-    analisis
-):
-
-    resultado = analisis.get(
-        "resultado",
-        {}
-    )
-
-    if not resultado:
-        return
-
-    st.subheader(
-        "📋 Información localizada"
+def seccion_verificaciones(expediente):
+    titulo_seccion(
+        "04. Verificación de requisitos"
     )
 
     st.caption(
-        "Los siguientes contenidos corresponden "
-        "a fragmentos encontrados en los documentos. "
-        "Todavía deben interpretarse y convertirse "
-        "en requisitos estructurados."
+        "Estas verificaciones deben basarse en "
+        "los documentos del proceso y los "
+        "soportes acreditados de INTILED."
     )
 
-    campos = [
-        (
-            "📌 Objeto contractual",
-            "objeto"
-        ),
-        (
-            "💰 Presupuesto",
-            "presupuesto"
-        ),
-        (
-            "⏱️ Plazo",
-            "plazo"
-        ),
-        (
-            "🏢 Experiencia requerida",
-            "experiencia"
-        ),
-        (
-            "👷 Personal mínimo / personal clave",
-            "personal"
-        ),
-        (
-            "💵 Capacidad financiera",
-            "financieros"
-        ),
-        (
-            "⚡ Especificaciones técnicas",
-            "especificaciones"
-        ),
-        (
-            "🏆 Factores de evaluación y puntaje",
-            "factores_evaluacion"
-        ),
-        (
-            "🛡️ Garantías",
-            "garantias"
-        ),
-        (
-            "❌ Causales de rechazo",
-            "causales_rechazo"
-        ),
-        (
-            "📦 Entregables",
-            "entregables"
-        ),
-        (
-            "💳 Forma de pago",
-            "forma_pago"
-        )
+    datos = cargar_datos()
+    identificador = clave_segura(
+        expediente["id"]
+    )
+
+    verificaciones = datos[
+        "verificaciones"
     ]
 
-    for titulo, clave in campos:
+    with st.form(
+        key=f"inti_docs_form_{identificador}"
+    ):
+        nuevos = {}
 
-        contenido = resultado.get(
-            clave,
-            ""
-        )
+        for categoria in CHECKLIST:
+            guardado = verificaciones.get(
+                categoria, {}
+            )
 
-        encontrado = bool(
-            contenido
-            and str(
-                contenido
-            ).strip()
-        )
+            if not isinstance(guardado, dict):
+                guardado = {}
 
-        if encontrado:
+            st.markdown(
+                f"**{categoria}**"
+            )
 
-            with st.expander(
-                f"✅ {titulo}",
-                expanded=False
-            ):
+            col1, col2 = st.columns(
+                [1, 2]
+            )
 
-                st.text_area(
-                    "Evidencia localizada",
-                    value=contenido,
-                    height=320,
-                    disabled=True,
+            estado_actual = guardado.get(
+                "estado",
+                "Pendiente de verificar",
+            )
+
+            with col1:
+                estado = st.selectbox(
+                    "Estado",
+                    ESTADOS_REVISION,
+                    index=(
+                        ESTADOS_REVISION.index(
+                            estado_actual
+                        )
+                        if estado_actual
+                        in ESTADOS_REVISION
+                        else 0
+                    ),
                     key=(
-                        f"resultado_{clave}_"
-                        f"{analisis.get('id')}"
-                    )
+                        "inti_docs_estado_"
+                        + identificador
+                        + clave_segura(categoria)
+                    ),
                 )
 
-        else:
-
-            with st.expander(
-                f"⚪ {titulo}",
-                expanded=False
-            ):
-
-                st.info(
-                    "INTI no localizó información "
-                    "suficiente sobre este campo "
-                    "en los documentos analizados."
+            with col2:
+                observacion = st.text_input(
+                    "Soporte u observación",
+                    value=guardado.get(
+                        "observacion", ""
+                    ),
+                    key=(
+                        "inti_docs_observacion_"
+                        + identificador
+                        + clave_segura(categoria)
+                    ),
                 )
 
+            nuevos[categoria] = {
+                "estado": estado,
+                "observacion": observacion,
+                "fecha": fecha_actual(),
+            }
 
-# ============================================================
-# ESTADO DEL ANÁLISIS
-# ============================================================
-
-def mostrar_estado(
-    analisis
-):
-
-    st.subheader(
-        "🔎 Estado del expediente"
-    )
-
-    estado = analisis.get(
-        "estado",
-        "SIN DOCUMENTOS"
-    )
-
-    documentos = analisis.get(
-        "documentos",
-        []
-    )
-
-    porcentaje = analisis.get(
-        "porcentaje_analisis",
-        0
-    )
-
-    col1, col2, col3 = st.columns(
-        3
-    )
-
-    with col1:
-
-        st.metric(
-            "Estado",
-            estado
+        guardar = st.form_submit_button(
+            "Guardar verificaciones",
+            type="primary",
+            use_container_width=True,
         )
 
-    with col2:
+    if guardar:
+        if (
+            oportunidad_activa() is None
+            or oportunidad_activa()["id"]
+            != expediente["id"]
+        ):
+            st.error(
+                "La convocatoria cambió. "
+                "No se guardaron las verificaciones."
+            )
+            return
 
-        st.metric(
-            "Documentos",
-            len(documentos)
-        )
+        datos_actuales = cargar_datos()
+        datos_actuales[
+            "verificaciones"
+        ] = nuevos
 
-    with col3:
-
-        st.metric(
-            "Cobertura",
-            f"{porcentaje}%"
-        )
-
-
-# ============================================================
-# NAVEGACIÓN
-# ============================================================
-
-def mostrar_navegacion(
-    oportunidad,
-    analisis
-):
+        if guardar_datos(
+            datos_actuales,
+            "Verificaciones documentales actualizadas",
+        ):
+            st.success(
+                "Verificaciones guardadas "
+                "en esta convocatoria."
+            )
 
     st.divider()
 
-    st.subheader(
-        "🚀 Siguiente paso"
+    st.markdown(
+        "**Resumen documental**"
     )
 
-    analizado = (
-        analisis.get(
-            "estado"
-        )
-        == "ANALIZADO"
+    vigentes = cargar_datos()[
+        "verificaciones"
+    ]
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Cumple verificado",
+        sum(
+            item.get("estado")
+            == "Cumple - verificado"
+            for item in vigentes.values()
+        ),
     )
 
-    if analizado:
-
-        st.success(
-            "El expediente ya tiene un primer "
-            "análisis documental. Podemos continuar "
-            "con el análisis estratégico y la "
-            "estructuración."
-        )
-
-    else:
-
-        st.info(
-            "Se recomienda completar el análisis "
-            "documental antes de estructurar "
-            "la propuesta definitiva."
-        )
-
-    col1, col2, col3 = st.columns(
-        3
+    c2.metric(
+        "No cumple verificado",
+        sum(
+            item.get("estado")
+            == "No cumple - verificado"
+            for item in vigentes.values()
+        ),
     )
 
-    # ========================================================
-    # ANÁLISIS INTILED
-    # ========================================================
-
-    with col1:
-
-        if st.button(
-            "🧠 Análisis INTILED",
-            use_container_width=True,
-            key="volver_analisis_intiled"
-        ):
-
-            st.session_state[
-                "oportunidad_seleccionada"
-            ] = oportunidad
-
-            st.session_state[
-                "navegar_a"
-            ] = "🧠 Análisis INTILED"
-
-            st.rerun()
-
-    # ========================================================
-    # ESTRUCTURACIÓN
-    # ========================================================
-
-    with col2:
-
-        if st.button(
-            "🏗️ Ir a Estructuración",
-            use_container_width=True,
-            type="primary",
-            key="ir_estructuracion_desde_analizador"
-        ):
-
-            st.session_state[
-                "oportunidad_seleccionada"
-            ] = oportunidad
-
-            st.session_state[
-                "iniciar_estructuracion"
-            ] = True
-
-            st.session_state[
-                "navegar_a"
-            ] = "🏗️ Estructuración"
-
-            st.rerun()
-
-    # ========================================================
-    # OPORTUNIDADES
-    # ========================================================
-
-    with col3:
-
-        if st.button(
-            "🎯 Volver a oportunidades",
-            use_container_width=True,
-            key="volver_oportunidades_analizador"
-        ):
-
-            st.session_state[
-                "navegar_a"
-            ] = "🎯 Oportunidades"
-
-            st.rerun()
+    c3.metric(
+        "Pendientes",
+        len(CHECKLIST) - sum(
+            item.get("estado") in (
+                "Cumple - verificado",
+                "No cumple - verificado",
+                "No aplica",
+            )
+            for item in vigentes.values()
+        ),
+    )
 
 
 # ============================================================
-# MÓDULO PRINCIPAL
+# HISTORIAL Y OBSERVACIONES
+# ============================================================
+
+def seccion_seguimiento(expediente):
+    titulo_seccion(
+        "05. Observaciones y seguimiento"
+    )
+
+    datos = cargar_datos()
+    identificador = clave_segura(
+        expediente["id"]
+    )
+
+    notas = st.text_area(
+        "Observaciones generales",
+        value=datos.get(
+            "observaciones_generales", ""
+        ),
+        height=150,
+        key=f"inti_docs_notas_{identificador}",
+        placeholder=(
+            "Registra aclaraciones, anexos "
+            "pendientes y conclusiones..."
+        ),
+    )
+
+    if st.button(
+        "Guardar observaciones",
+        type="primary",
+        use_container_width=True,
+        key=f"inti_docs_guardar_notas_{identificador}",
+    ):
+        actuales = cargar_datos()
+
+        actuales[
+            "observaciones_generales"
+        ] = notas
+
+        if guardar_datos(
+            actuales,
+            "Observaciones documentales actualizadas",
+        ):
+            st.success(
+                "Observaciones guardadas."
+            )
+
+    with st.expander(
+        "Consultar historial de la convocatoria"
+    ):
+        eventos = expediente.get(
+            "historial", []
+        )
+
+        if not eventos:
+            st.info(
+                "Todavía no hay eventos registrados."
+            )
+
+        for evento in reversed(
+            eventos[-30:]
+        ):
+            st.caption(
+                str(evento.get("fecha", ""))
+                + " · "
+                + str(evento.get("accion", ""))
+            )
+
+
+# ============================================================
+# PÁGINA PRINCIPAL
 # ============================================================
 
 def mostrar_analizador():
+    iniciar_workspace()
+    sincronizar_legacy()
 
-    # ========================================================
-    # SIN OPORTUNIDAD
-    # ========================================================
+    estilos()
+    encabezado()
 
-    if (
-        "oportunidad_seleccionada"
-        not in st.session_state
-    ):
+    expediente = seleccionar_expediente()
 
-        st.title(
-            "📑 Analizador de Documentos"
-        )
-
-        st.caption(
-            "Lectura y análisis documental "
-            "de convocatorias."
-        )
-
-        st.divider()
-
-        st.info(
-            "No existe una convocatoria seleccionada."
-        )
-
-        st.write(
-            "Ve al **🔎 Radar de oportunidades**, "
-            "selecciona una convocatoria y utiliza "
-            "**📑 Analizar pliegos / TDR**."
-        )
-
+    if expediente is None:
         return
 
-    # ========================================================
-    # RECUPERAR OPORTUNIDAD
-    # ========================================================
-
-    oportunidad = st.session_state[
-        "oportunidad_seleccionada"
-    ]
-
-    # ========================================================
-    # INICIALIZAR EXPEDIENTE
-    # ========================================================
-
-    analisis = (
-        inicializar_analisis_documental(
-            oportunidad
-        )
+    tab_documentos, tab_revision, tab_historial = (
+        st.tabs([
+            "Documentos",
+            "Verificación",
+            "Seguimiento",
+        ])
     )
 
-    # ========================================================
-    # ENCABEZADO
-    # ========================================================
+    with tab_documentos:
+        seccion_cargar(expediente)
+        seccion_documentos(expediente)
 
-    mostrar_encabezado(
-        oportunidad
-    )
+    with tab_revision:
+        seccion_verificaciones(expediente)
+
+    with tab_historial:
+        seccion_seguimiento(expediente)
 
     st.divider()
 
-    # ========================================================
-    # ESTADO
-    # ========================================================
-
-    mostrar_estado(
-        analisis
+    st.caption(
+        "INTI Projects Enterprise · INTILED SAS BIC. "
+        "La extracción y detección de apartados "
+        "no equivalen a una evaluación automática "
+        "del cumplimiento contractual."
     )
 
-    st.divider()
 
-    # ========================================================
-    # FUENTE OFICIAL
-    # ========================================================
+# ============================================================
+# ALIAS DE COMPATIBILIDAD
+# ============================================================
 
-    mostrar_fuente_oficial(
-        oportunidad
-    )
+def mostrar_analizador_documentos():
+    return mostrar_analizador()
 
-    st.divider()
 
-    # ========================================================
-    # GUÍA
-    # ========================================================
+def mostrar_analizador_documental():
+    return mostrar_analizador()
 
-    mostrar_guia_documental()
 
-    st.divider()
-
-    # ========================================================
-    # CARGA
-    # ========================================================
-
-    mostrar_cargador(
-        oportunidad,
-        analisis
-    )
-
-    st.divider()
-
-    # ========================================================
-    # DOCUMENTOS ASOCIADOS
-    # ========================================================
-
-    mostrar_documentos_asociados(
-        analisis
-    )
-
-    st.divider()
-
-    # ========================================================
-    # ANALIZAR
-    # ========================================================
-
-    mostrar_accion_analisis(
-        oportunidad,
-        analisis
-    )
-
-    # ========================================================
-    # RESULTADOS SOLO DESPUÉS DEL ANÁLISIS
-    # ========================================================
-
-    if (
-        analisis.get(
-            "estado"
-        )
-        == "ANALIZADO"
-    ):
-
-        st.divider()
-
-        mostrar_cobertura_documental(
-            analisis
-        )
-
-        mostrar_errores(
-            analisis
-        )
-
-        st.divider()
-
-        mostrar_resultados(
-            analisis
-        )
-
-    # ========================================================
-    # NAVEGACIÓN
-    # ========================================================
-
-    mostrar_navegacion(
-        oportunidad,
-        analisis
-    )
+def mostrar_analyzer():
+    return mostrar_analizador()
